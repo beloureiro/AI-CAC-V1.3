@@ -5,17 +5,17 @@ import os
 from datetime import datetime
 
 def load_yaml_file(filepath):
-    """Carregar arquivos YAML."""
+    """Load YAML files."""
     with open(filepath, "r", encoding="utf-8") as file:
         return yaml.safe_load(file)
 
 def load_feedback(filepath):
-    """Carregar feedback de um arquivo de texto."""
+    """Load feedback from a text file."""
     with open(filepath, "r", encoding="utf-8") as file:
         return file.read()
 
 def send_request(url, headers, model, prompt, max_tokens, temperature):
-    """Enviar a requisição POST para o modelo."""
+    """Send a POST request to the model."""
     payload = {
         "model": model,
         "prompt": prompt,
@@ -23,39 +23,39 @@ def send_request(url, headers, model, prompt, max_tokens, temperature):
         "temperature": temperature
     }
 
-    # Fazer a requisição POST
+    # Make the POST request
     response = requests.post(url, headers=headers, data=json.dumps(payload))
 
-    # Verificar o status da resposta
+    # Check the response status
     if response.status_code == 200:
         completion = response.json()
         return completion['choices'][0]['text']
     else:
-        print(f"Erro: {response.status_code}")
+        print(f"Error: {response.status_code}")
         print(response.text)
         return None
 
 def save_results_to_md(results):
-    """Salvar os resultados da análise em um arquivo Markdown."""
-    # Pega a data e hora atuais
+    """Save the analysis results to a Markdown file."""
+    # Get the current date and time
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    # Define o caminho do arquivo .md com base na pasta especificada e no formato "report_data_hora.md"
+    # Define the .md file path based on the specified folder and the format "report_date_time.md"
     md_file_path = os.path.join(
         "D:/OneDrive - InMotion - Consulting/AI Projects/AI-CAC-V1.3/LmStudio/lms_reports_md", 
         f'report_{current_time}.md'
     )
 
-    # Abrir o arquivo em modo de escrita (criar ou sobrescrever)
+    # Open the file in write mode (create or overwrite)
     with open(md_file_path, 'w', encoding='utf-8') as file:
         file.write("# Feedback Analysis Report\n\n")
         file.write("This report contains the analysis results for each expert agent based on the patient's feedback.\n\n")
         
         for agent, result in results.items():
-            file.write(f"## {agent}\n\n")
-            file.write(f"```\n{result}\n```\n\n")
+            file.write(f"## {agent}\n")
+            file.write(f"{result}\n")
 
     print(f"Results saved to {md_file_path}")
     
-    # Retorna o caminho do arquivo para uso posterior
+    # Return the file path for later use
     return md_file_path

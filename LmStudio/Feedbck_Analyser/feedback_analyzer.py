@@ -1,46 +1,46 @@
-import time  # Adicionando para medição de tempo
+import time  # Adding for time measurement
 from utils import load_yaml_file, load_feedback, send_request, save_results_to_md
 
 class FeedbackAnalyzer:
     def __init__(self, config_path, feedback_path, agents_path):
-        # Carregar as configurações do arquivo YAML
+        # Load the configuration from the YAML file
         self.config = load_yaml_file(config_path)
         
-        # Carregar o feedback do arquivo de texto
+        # Load the feedback from the text file
         self.feedback = load_feedback(feedback_path)
 
-        # Carregar os agentes do arquivo YAML
+        # Load the agents from the YAML file
         self.agents = load_yaml_file(agents_path)['agents']
 
-        # Configurações da API do modelo
+        # Model API configurations
         self.url = self.config['server']['url']
-        self.model = self.config['request']['lmstudio_models']['Meta-Llama-3.1-8B-Instruct-GGUF'] #--> escolhe o modelo de acordo com o arquivo de configuração
+        self.model = self.config['request']['lmstudio_models']['Meta-Llama-3.1-8B-Instruct-GGUF']  #--> choose the model according to the configuration file
         self.headers = {"Content-Type": "application/json"}
 
     def analyze_with_agent(self, agent_prompt, max_tokens, temperature):
-        # Substituir o espaço reservado "[feedback]" com o feedback real
+        # Replace the placeholder "[feedback]" with the actual feedback
         prompt_with_feedback = agent_prompt.replace("[feedback]", self.feedback)
-        # Enviar a solicitação ao modelo
+        # Send the request to the model
         return send_request(self.url, self.headers, self.model, prompt_with_feedback, max_tokens, temperature)
 
     def run_analysis(self):
-        # Dicionário para armazenar os resultados de cada agente
+        # Dictionary to store the results of each agent
         results = {}
 
-        # Executar cada agente e coletar as respostas
+        # Execute each agent and collect the responses
         for agent_name, agent_data in self.agents.items():
             print(f"Running analysis for {agent_name}...")
 
-            # Extrair o prompt, max_tokens e temperatura do YAML
+            # Extract the prompt, max_tokens, and temperature from the YAML
             prompt = agent_data['prompt']
             max_tokens = agent_data.get('max_tokens')
             temperature = agent_data.get('temperature')
 
-            # Verifica se max_tokens e temperature estão definidos para o agente, senão lança um erro
+            # Check if max_tokens and temperature are defined for the agent, otherwise raise an error
             if max_tokens is None or temperature is None:
-                raise ValueError(f"Agente {agent_name} não tem 'max_tokens' ou 'temperature' definidos no YAML.")
+                raise ValueError(f"Agent {agent_name} does not have 'max_tokens' or 'temperature' defined in the YAML.")
 
-            # Fazer a análise com o agente
+            # Perform the analysis with the agent
             result = self.analyze_with_agent(prompt, max_tokens, temperature)
             results[agent_name] = result
 
@@ -48,36 +48,36 @@ class FeedbackAnalyzer:
         
         return results
 
-# Caminhos dos arquivos
+# File paths
 config_path = "config/local_llm.yaml"
 feedback_path = "D:/OneDrive - InMotion - Consulting/AI Projects/AI-CAC-V1.3/patient_feedback.txt"
-agents_path = "LmStudio/lm_agents.yaml"
+agents_path = "LmStudio/Feedbck_Analyser/lm_agents.yaml"
 
-# Medir o tempo de início
+# Measure the start time
 start_time = time.time()
 
-# Instanciar o analisador de feedback
+# Instantiate the feedback analyzer
 analyzer = FeedbackAnalyzer(config_path, feedback_path, agents_path)
 
-# Executar a análise
-resultados = analyzer.run_analysis()
+# Run the analysis
+results = analyzer.run_analysis()
 
-# Salvar os resultados no arquivo .md e obter o caminho do arquivo gerado
-md_file_path = save_results_to_md(resultados)
+# Save the results to the .md file and get the path of the generated file
+md_file_path = save_results_to_md(results)
 
-# Medir o tempo de término
+# Measure the end time
 end_time = time.time()
 
-# Calcular o tempo total
+# Calculate the total time
 execution_time = end_time - start_time
 
-# Converter para minutos e segundos
+# Convert to minutes and seconds
 minutes, seconds = divmod(execution_time, 60)
 execution_message = f"Total execution time: {int(minutes)} minutes and {int(seconds)} seconds."
 
-# Imprimir o tempo total no console
+# Print the total time to the console
 print(execution_message)
 
-# Adicionar o tempo de execução no final do arquivo .md gerado
+# Append the execution time at the end of the generated .md file
 with open(md_file_path, "a", encoding='utf-8') as file:
     file.write(f"\n{execution_message}\n")
