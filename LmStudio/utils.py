@@ -42,7 +42,7 @@ def save_results_to_md(results):
 
     # Define o caminho do arquivo .md com base na pasta especificada e no formato "report_data_hora.md"
     md_file_path = os.path.join(
-        "D:/OneDrive - InMotion - Consulting/AI Projects/AI-CAC-V1.2/LmStudio/lms_reports_md", 
+        "D:/OneDrive - InMotion - Consulting/AI Projects/AI-CAC-V1.3/LmStudio/lms_reports_md", 
         f'report_{current_time}.md'
     )
 

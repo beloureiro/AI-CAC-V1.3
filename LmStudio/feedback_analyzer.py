@@ -1,4 +1,3 @@
-import os
 import time  # Adicionando para medição de tempo
 from utils import load_yaml_file, load_feedback, send_request, save_results_to_md
 
@@ -15,7 +14,7 @@ class FeedbackAnalyzer:
 
         # Configurações da API do modelo
         self.url = self.config['server']['url']
-        self.model = self.config['request']['model']['Meta-Llama-3.1-8B-Instruct-GGUF']
+        self.model = self.config['request']['model']['Meta-Llama-3.1-8B-Instruct-GGUF'] #--> escolhe o modelo de acordo com o arquivo de configuração
         self.headers = {"Content-Type": "application/json"}
 
     def analyze_with_agent(self, agent_prompt, max_tokens, temperature):
