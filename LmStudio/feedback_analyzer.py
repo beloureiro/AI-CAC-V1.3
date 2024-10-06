@@ -51,7 +51,7 @@ class FeedbackAnalyzer:
 
 # Caminhos dos arquivos
 config_path = "config/local_llm.yaml"
-feedback_path = "D:/OneDrive - InMotion - Consulting/AI Projects/AI-CAC-V1.2/patient_feedback.txt"
+feedback_path = "D:/OneDrive - InMotion - Consulting/AI Projects/AI-CAC-V1.3/patient_feedback.txt"
 agents_path = "LmStudio/lm_agents.yaml"
 
 # Medir o tempo de início

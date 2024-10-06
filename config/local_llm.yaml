@@ -21,6 +21,7 @@ embeddings:
     nomic_text_model: "nomic-embed-text:latest"
     mxbai_text_model: "ollama/mxbai-embed-large:latest"
 
+# LmStudio local models and server configuration
 server:
   url: "http://127.0.0.1:1234/v1/completions"
 

@@ -7,7 +7,7 @@ with open('config/local_llm.yaml', 'r') as file:
     config = yaml.safe_load(file)
 
 # Configurando o modelo Ollama
-llm_model = config['models']['llama3_2_1b_instruct_q5_K_S']
+llm_model = config['models']['llama_3_1_8b_instruct_q8_0']
 
 # Common stop sequences for all models
 #stop_sequences = ["\n# Agent:", "\n# Task:", "<|endoftext|>"]
