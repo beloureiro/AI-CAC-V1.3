@@ -1,3 +1,19 @@
+---
+### What's New in Version 1.3
+#### Introducing RAGBot: A Healthcare Coaching Assistant
+
+Version 1.3 introduces **RAGBot**, a **Retrieval-Augmented Generation (RAG)** chatbot. This new feature combines **SentenceTransformer (all-MiniLM-L6-v2)** for generating text embeddings with a **FAISS** index to quickly retrieve relevant expert feedback. RAGBot acts as a personalized coaching assistant for healthcare professionals.
+
+#### Key Technical Features:
+- **New Chat Functionality**: Users can now interact with RAGBot in real-time, receiving expert-driven, actionable feedback on performance.
+- **Efficient Data Handling**: Markdown reports are consolidated, split into chunks, and indexed for fast, context-driven responses.
+- **Contextual Response Generation**: RAGBot retrieves relevant text chunks using FAISS and generates personalized responses using advanced models to maintain dynamic interactions.
+- **Modular Design**: The architecture separates data processing, embedding generation, and FAISS indexing, enhancing maintainability.
+- **API-based LLM Integration**: Custom API interactions with configurable parameters (e.g., temperature, token limits) ensure precise responses tailored to user queries.
+
+This version significantly expands functionality, introducing real-time, context-aware interactions to assist healthcare professionals.
+
+---
 # AI Clinical Advisory Crew (v1.3)
 
 ## Description
@@ -14,15 +30,6 @@ At the heart of this system lies its dynamic flexibility: it navigates across a 
 4. **Python resource with LM Studio**:
    - I’ve integrated LM Studio, offering a robust platform for testing new models and comparing their performance.
    - This allows for direct comparisons between models and improved configurability for advanced local LLM execution.
-
-### What's New in Version 1.3
-- **Code Refactoring**: The entire codebase has been refactored to improve modularity, maintainability, and readability. This ensures that the system is easier to enhance and maintain, with a cleaner and more organized structure.
-- **LM Studio Integration**: Added the option to use LM Studio, a powerful new resource for local LLM execution. This includes:
-  - **Parallel Model Execution**: Ability to run multiple models simultaneously for direct comparison, enabling more efficient evaluation of model performance.
-  - **Granular Control Over Parameters**: Users can now fine-tune parameters such as temperature, top_p, and repetition penalty for precise model behavior.
-  - **GPU Optimization**: LM Studio makes use of NVIDIA/AMD GPUs with support for model quantization, which helps in reducing memory usage while maintaining performance.
-  - **API Compatibility and Performance Monitoring**: Seamless integration with OpenAI-like API and real-time streaming, alongside detailed CPU/GPU metrics for execution monitoring.
-  - **Performance Metrics Comparison**: Facilitates detailed comparisons of different LLM models, making it easier to determine the most suitable model for each use case.
 
 ### Benefits of LM Studio Integration
 
@@ -48,7 +55,7 @@ These agents are powered by a diverse range of LLMs, which are dynamically teste
 
 ## Requirements
 - Python 3.8+
-- Dependencies listed in 
+- Dependencies listed in `requirements.txt`
 
 ## Installation
 1. Clone the repository
@@ -63,14 +70,14 @@ Run the main script:
 python main.py
 ```
 
-The script reads patient feedback from  and performs analysis through the AI agent team.
+The script reads patient feedback from input sources and performs analysis through the AI agent team.
 
 ## Project Structure
-- : Main script
-- : Project configurations
-- : Agent definitions
-- : Task definitions
-- : Utility functions
+- `main.py`: Main script
+- `config/`: Project configurations
+- `agents/`: Agent definitions
+- `tasks/`: Task definitions
+- `utils/`: Utility functions
 
 ## Contributing
 Contributions are welcome. Please open an issue to discuss proposed changes.
