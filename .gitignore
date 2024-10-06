@@ -1,0 +1,25 @@
+# Ignorar arquivos de sistema
+.DS_Store
+Thumbs.db
+
+# Ignorar arquivos de log
+*.log
+
+# Ignorar ambientes virtuais
+.venv/
+
+# Ignorar arquivos de configuração do IDE
+.vscode/
+.idea/
+
+# Ignorar dependências
+node_modules/
+
+# Ignorar arquivos de build
+/dist/
+/build/
+
+# Ignorar arquivos temporários
+*.tmp
+*.temp
+

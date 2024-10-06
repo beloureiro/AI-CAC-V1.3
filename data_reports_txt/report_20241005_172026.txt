@@ -1,0 +1,53 @@
+############################
+# AI Clinical Advisory Crew Report
+############################
+
+Patient Feedback: Unfortunately, the doctor did not appear during an ONLINE consultation.
+
+############################
+# Agent: Patient Experience Expert
+## Final Answer:
+Sentiment_Patient_Experience_Expert: Negative
+Emotional_Intensity_Patient_Experience_Expert: -0.5
+Urgency_Level_Patient_Experience_Expert: Low
+Key_Issues_Patient_Experience_Expert:
+- The patient was unable to see the doctor during an online consultation.
+- The issue is related to the quality of healthcare services provided in this context.
+
+############################
+# Agent: Health & IT Process Expert with expertise in Business Process Model and Notation (BPMN)
+## Final Answer:
+Unfortunately, there is insufficient information to analyze the patient's experience and identify positive aspects, inefficiencies, or improvement suggestions.
+
+############################
+# Agent: Clinical Psychologist
+## Final Answer:
+Emotional_State_Clinical_Psychologist: Poor
+Support_Strategy_Clinical_Psychologist: Reinforce emotional well-being.
+Suggested_Approach_Clinical_Psychologist:
+- Address emotional concerns through empathetic listening and validation.
+
+############################
+# Agent: Communication Expert
+## Final Answer:
+Communication_Quality_Communication_Expert: Poor
+Issues_Identified_Communication_Expert:
+- The patient did not appear during an ONLINE consultation.
+Suggested_Improvements_Communication_Expert:
+- Allow for flexible appointment times to accommodate different schedules and availability of staff members.
+Final_Recommendation_Communication_Expert: Reinforce emotional well-being.
+
+############################
+# Agent: Manager and Advisor
+## Final Answer:
+* Action: Reinforce emotional well-being.
+
+Total execution time: 5 minutes and 29 seconds.
+############################
+# Consolidated Final Report
+############################
+
+Disclaimer
+The analyses in this report were conducted by different LLM models in training mode, which take patient feedback as absolute truth. Feedback reflects the patient's individual perception and, in some cases, may not capture the full complexity of the situation, including institutional and contextual factors.
+AI Clinical Advisory Crew framework, beyond providing technical analyses, acts as a strategic driver, steering managerial decisions across various operational areas.
+The reader is responsible for validating the feasibility of the suggested actions and their alignment with stakeholder objectives.

@@ -1,0 +1,55 @@
+{
+    "patient_feedback": "Unfortunately, the doctor did not appear during an ONLINE consultation.",
+    "total_execution_time": "5 minutes and 29 seconds",
+    "agents": [
+        {
+            "agent_name": "Patient Experience Expert",
+            "response": {
+                "Sentiment_Patient_Experience_Expert": "Negative",
+                "Emotional_Intensity_Patient_Experience_Expert": "-0.5",
+                "Urgency_Level_Patient_Experience_Expert": "Low",
+                "Key_Issues_Patient_Experience_Expert": [
+                    "",
+                    "The patient was unable to see the doctor during an online consultation.",
+                    "The issue is related to the quality of healthcare services provided in this context."
+                ]
+            }
+        },
+        {
+            "agent_name": "Health & IT Process Expert with expertise in Business Process Model and Notation (BPMN)",
+            "response": {}
+        },
+        {
+            "agent_name": "Clinical Psychologist",
+            "response": {
+                "Emotional_State_Clinical_Psychologist": "Poor",
+                "Support_Strategy_Clinical_Psychologist": "Reinforce emotional well-being.",
+                "Suggested_Approach_Clinical_Psychologist": [
+                    "",
+                    "Address emotional concerns through empathetic listening and validation."
+                ]
+            }
+        },
+        {
+            "agent_name": "Communication Expert",
+            "response": {
+                "Communication_Quality_Communication_Expert": "Poor",
+                "Issues_Identified_Communication_Expert": [
+                    "",
+                    "The patient did not appear during an ONLINE consultation."
+                ],
+                "Suggested_Improvements_Communication_Expert": [
+                    "",
+                    "Allow for flexible appointment times to accommodate different schedules and availability of staff members."
+                ],
+                "Final_Recommendation_Communication_Expert": "Reinforce emotional well-being."
+            }
+        },
+        {
+            "agent_name": "Manager and Advisor",
+            "response": {
+                "* Action": "Reinforce emotional well-being."
+            }
+        }
+    ]
+}
