@@ -100,50 +100,68 @@ class RAGBot:
     def call_llm(self, query, context_chunks, structured=False):
         """
         Calls the LM Studio model with the user's query and relevant context chunks.
-        Optionally supports structured output if requested.
+        The chatbot acts as a personal healthcare coach, offering balanced feedback based on expert reports.
         
         :param query: User's input query.
         :param context_chunks: The retrieved text chunks relevant to the query.
         :param structured: Boolean to indicate if structured output is requested.
         :return: The response from the LLM.
         """
-        # Define the system message to pass the LLM its identity and role
+        # System message focused on personalized coaching with honesty
         system_message = {
             "role": "system", 
-            "content": "You are a helpful assistant that provides accurate and relevant responses based on the provided context."
+            "content": (
+                "You are **your healthcare professional coach**. You provide direct, honest, and actionable advice based on feedback "
+                "from experts including PatientExperienceExpert, HealthITProcessExpert, ClinicalPsychologist, CommunicationExpert, and ManagerAndAdvisor. "
+                "Be transparent in your feedback. Highlight both **positive aspects** and **areas that need improvement**, without sugarcoating. "
+                "Your job is to make the healthcare professional better by offering constructive and detailed insights based on the expert reports."
+            )
         }
 
-        # The user's query
-        user_message = {"role": "user", "content": query}
+        # Combine the retrieved context chunks
+        context_combined = "\n".join(context_chunks)
 
-        # Context combined with the question
-        prompt = f"Context:\n{''.join(context_chunks)}\n\nQuestion: {query}\nAnswer:"
-        
+        # Construct the prompt based on the user's query and relevant context
+        if "improve" in query.lower() or "fault" in query.lower() or "issue" in query.lower():
+            prompt = (
+                f"Context:\n{context_combined}\n\nQuestion: {query}\n"
+                "As **your coach**, based on the experts' feedback, here are the areas you need to improve. Be specific and suggest actionable steps for improvement."
+            )
+        elif "strengths" in query.lower() or "positive" in query.lower():
+            prompt = (
+                f"Context:\n{context_combined}\n\nQuestion: {query}\n"
+                "As **your coach**, based on the experts' feedback, here are the strengths of your professional performance. Highlight the positive actions that have been successful."
+            )
+        else:
+            prompt = f"Context:\n{context_combined}\n\nQuestion: {query}\nAnswer based only on the context provided."
+
+        # Set up the payload for the LLM request
         payload = {
             "model": "meta-llama-3.1-8b-instruct",
             "messages": [
-                system_message,   # Pass the system message here
-                {"role": "user", "content": prompt}  # The user's prompt and context
+                system_message,   # System message defining the LLM's role
+                {"role": "user", "content": prompt}  # User's prompt and context
             ],
-            "temperature": 0.7,
-            "max_tokens": 200,
+            "temperature": 0.4,
+            "max_tokens": 300,
             "stream": False
         }
-        
+
         # If structured output is requested, add the response_format schema
         if structured:
             payload["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {
-                    "name": "response_schema",
+                    "name": "coaching_response",
                     "strict": True,
                     "schema": {
                         "type": "object",
                         "properties": {
-                            "answer": {"type": "string"},
-                            "additional_info": {"type": "string"}
+                            "improvement_suggestions": {"type": "string"},
+                            "strengths": {"type": "string"},
+                            "feedback_source": {"type": "string"}
                         },
-                        "required": ["answer"]
+                        "required": ["improvement_suggestions", "strengths"]
                     }
                 }
             }
@@ -151,10 +169,50 @@ class RAGBot:
         # Send the request to LM Studio
         response = requests.post(self.LM_STUDIO_API_URL, json=payload)
 
+        # Return the response from the LLM
         if response.status_code == 200:
             return response.json()['choices'][0]['message']['content']
         else:
             return "Error: Failed to get response from LM Studio."
+
+
+    def filter_context_based_on_expert(self, query, context_chunks):
+        """
+        Filters context chunks based on which expert is being referenced in the query.
+        This ensures that only relevant context is passed to the LLM.
+        
+        :param query: The user's query which may reference a specific expert.
+        :param context_chunks: The full set of context chunks retrieved.
+        :return: A list of context chunks relevant to the expert mentioned in the query.
+        """
+        expert_map = {
+            "PatientExperienceExpert": [],
+            "HealthITProcessExpert": [],
+            "ClinicalPsychologist": [],
+            "CommunicationExpert": [],
+            "ManagerAndAdvisor": []
+        }
+
+        # Organize context chunks by expert
+        for chunk in context_chunks:
+            if "PatientExperienceExpert" in chunk:
+                expert_map["PatientExperienceExpert"].append(chunk)
+            elif "HealthITProcessExpert" in chunk:
+                expert_map["HealthITProcessExpert"].append(chunk)
+            elif "ClinicalPsychologist" in chunk:
+                expert_map["ClinicalPsychologist"].append(chunk)
+            elif "CommunicationExpert" in chunk:
+                expert_map["CommunicationExpert"].append(chunk)
+            elif "ManagerAndAdvisor" in chunk:
+                expert_map["ManagerAndAdvisor"].append(chunk)
+
+        # If the query refers to a specific expert, return their relevant context
+        for expert, chunks in expert_map.items():
+            if expert.lower() in query.lower():
+                return chunks
+
+        # If no specific expert is referenced, return all context chunks
+        return context_chunks
 
 
     def chatbot(self):
