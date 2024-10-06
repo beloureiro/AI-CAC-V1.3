@@ -1,0 +1,98 @@
+{
+    "patient_feedback": "Absolute lack of interest in the patient's evolution and worsening.",
+    "total_execution_time": "19 minutes and 20 seconds",
+    "agents": [
+        {
+            "agent_name": "Patient Experience Expert",
+            "response": {
+                "Sentiment_Patient_Experience_Expert": "Negative",
+                "Emotional_Intensity_Patient_Experience_Expert": "-1",
+                "Urgency_Level_Patient_Experience_Expert": "High",
+                "Key_Issues_Patient_Experience_Expert": [
+                    "",
+                    "Lack of interest in patient's evolution",
+                    "Worsening"
+                ]
+            }
+        },
+        {
+            "agent_name": "Health & IT Process Expert with expertise in Business Process Model and Notation (BPMN)",
+            "response": {
+                "Patient_Journey_Health_IT_Process_Expert": [
+                    "",
+                    "The patient visited the healthcare facility for a check-up.",
+                    "Upon arrival, they were directed to the waiting area where they had to wait for an extended period before being seen by a doctor.",
+                    "They were then taken to a consultation room where the doctor examined them and provided a diagnosis."
+                ],
+                "Additional steps as applicable based on feedback": [
+                    "",
+                    "The patient was not updated on their condition or treatment plan. "
+                ],
+                "Positive Aspects (if applicable)": [
+                    "",
+                    "No positive aspects mentioned in the feedback "
+                ],
+                "Inefficiencies_Healthcare_Process_Health_IT_Process_Expert": [
+                    " No inefficiencies",
+                    "Lack of interest from healthcare staff in the patient's evolution.",
+                    "Inadequate communication about the patient's worsening condition.",
+                    "Prolonged waiting times before being seen by a doctor."
+                ],
+                "Improvement_Suggestions_Healthcare_Process_Health_IT_Process_Expert": [
+                    " No improvements needed",
+                    "Implement a system for regular updates on patients' conditions and treatment plans to address lack of interest in patient evolution.",
+                    "Improve communication between healthcare staff to ensure timely and accurate information sharing about patients' worsening conditions.",
+                    "Implement measures to reduce waiting times, such as streamlining the appointment schedule or providing patients with real-time updates on delays."
+                ]
+            }
+        },
+        {
+            "agent_name": "Clinical Psychologist",
+            "response": {
+                "Emotional_State_Clinical_Psychologist": "Concerned and frustrated, with underlying anxiety about their health.",
+                "Support_Strategy_Clinical_Psychologist": "Develop a plan to address emotional concerns through open communication, empathy, and reassurance while improving the overall patient experience.",
+                "Suggested_Approach_Clinical_Psychologist": [
+                    "",
+                    "Establish regular check-ins with the patient to provide updates on their condition and treatment plan, fostering trust and reducing uncertainty.",
+                    "Implement measures to reduce waiting times, such as streamlining appointment schedules or offering real-time updates on delays, to minimize frustration.",
+                    "Improve communication between healthcare staff by ensuring that all team members are aware of the patient's situation, improving coordination and reducing misunderstandings.",
+                    "Consider a brief intervention to address anxiety and concern directly through cognitive-behavioral techniques or relaxation methods if needed."
+                ]
+            }
+        },
+        {
+            "agent_name": "Communication Expert",
+            "response": {
+                "Communication_Quality_Communication_Expert": "Poor",
+                "Issues_Identified_Communication_Expert": [
+                    "",
+                    "Lack of interest in the patient's evolution and worsening."
+                ],
+                "Suggested_Improvements_Communication_Expert": [
+                    "",
+                    "Implement regular updates from healthcare providers on the patient's condition, treatment plan, and any changes or concerns.",
+                    "Encourage open communication by actively listening to patients' concerns, asking clarifying questions, and providing reassurance when necessary.",
+                    "Develop a clear and concise communication plan for all team members involved in the patient's care to ensure that everyone is informed and aligned with the patient's situation.",
+                    "Consider using a standardized template or checklist to ensure that all necessary information is shared and discussed during patient interactions. "
+                ],
+                "Final_Recommendation_Communication_Expert": "Implement a structured communication plan that prioritizes regular updates, open communication, and team coordination to improve patient satisfaction and trust in the healthcare system."
+            }
+        },
+        {
+            "agent_name": "Manager and Advisor",
+            "response": {
+                "Key_Issues_Manager_and_Advisor": [
+                    "",
+                    "Lack of interest in the patient's evolution and worsening."
+                ],
+                "Recommendations_Manager_and_Advisor": [
+                    "",
+                    "Implement regular updates from healthcare providers on the patient's condition, treatment plan, and any changes or concerns.",
+                    "Encourage open communication by actively listening to patients' concerns, asking clarifying questions, and providing reassurance when necessary.",
+                    "Develop a clear and concise communication plan for all team members involved in the patient's care to ensure that everyone is informed and aligned with the patient's situation.",
+                    "Consider using a standardized template or checklist to ensure that all necessary information is shared and discussed during patient interactions."
+                ]
+            }
+        }
+    ]
+}

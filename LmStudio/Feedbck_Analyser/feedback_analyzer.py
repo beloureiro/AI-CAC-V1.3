@@ -14,7 +14,7 @@ class FeedbackAnalyzer:
 
         # Configurações da API do modelo
         self.url = self.config['server']['url']
-        self.model = self.config['request']['model']['Meta-Llama-3.1-8B-Instruct-GGUF'] #--> escolhe o modelo de acordo com o arquivo de configuração
+        self.model = self.config['request']['lmstudio_models']['Meta-Llama-3.1-8B-Instruct-GGUF'] #--> escolhe o modelo de acordo com o arquivo de configuração
         self.headers = {"Content-Type": "application/json"}
 
     def analyze_with_agent(self, agent_prompt, max_tokens, temperature):

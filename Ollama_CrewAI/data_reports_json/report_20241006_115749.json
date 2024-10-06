@@ -1,0 +1,90 @@
+{
+    "patient_feedback": "When I arrived at the medical center they informed me that the doctor was not going to come and no one informed me. A day before he had confirmed the visit. Terrible. Luckily, the staff at the medical center informed me of everything very kindly, but Doctoralia's service was very poor.",
+    "total_execution_time": "1 minutes and 27 seconds",
+    "agents": [
+        {
+            "agent_name": "Patient Experience Expert",
+            "response": {
+                "Sentiment_Patient_Experience_Expert": "Negative",
+                "Emotional_Intensity_Patient_Experience_Expert": "-0.8",
+                "Urgency_Level_Patient_Experience_Expert": "High",
+                "Key_Issues_Patient_Experience_Expert": [
+                    "",
+                    "Doctor was not present for the scheduled appointment despite prior confirmation.",
+                    "Poor service from Doctoralia"
+                ]
+            }
+        },
+        {
+            "agent_name": "Health & IT Process Expert with expertise in Business Process Model and Notation (BPMN)",
+            "response": {
+                "Patient_Journey_Health_IT_Process_Expert": [
+                    "",
+                    "Arrived at the medical center.",
+                    "Waited for information regarding the doctor's absence (Transition due to lack of prior notification).",
+                    "Received very kind and informative explanations from the staff about what had happened."
+                ],
+                "Positive Aspects": [
+                    "",
+                    "The kindness and helpfulness of the staff, who informed me of everything very kindly."
+                ],
+                "Inefficiencies_Healthcare_Process_Health_IT_Process_Expert": [
+                    "",
+                    "Inadequate communication regarding the doctor's absence"
+                ],
+                "Improvement_Suggestions_Healthcare_Process_Health_IT_Process_Expert": [
+                    "",
+                    "Implement a system to ensure that patients are promptly notified about any changes in their scheduled appointments, ideally through direct contact or push notifications.",
+                    "Review and improve Doctoralia's service standards for better patient experience. "
+                ],
+                "Note": "Strict adherence was maintained to BPMN principles while analyzing the patient’s journey based on their feedback."
+            }
+        },
+        {
+            "agent_name": "Clinical Psychologist",
+            "response": {
+                "Emotional_State_Clinical_Psychologist": "Generally Positive but with Underlying Frustration and Disappointment.",
+                "Support_Strategy_Clinical_Psychologist": "Empathetic listening and acknowledgement of feelings, addressing the emotional impact of the doctor's absence on the patient's experience, while reinforcing positive aspects of care such as kindness from staff.",
+                "Suggested_Approach_Clinical_Psychologist": [
+                    "",
+                    "Acknowledge and validate the patient's frustration regarding the lack of notification about the doctor's absence, empathizing with their feelings to create a safe space for open communication.",
+                    "Discuss specific strategies or alternatives that can be implemented to prevent similar situations in the future, such as implementing direct contact or push notifications when there are schedule changes.",
+                    "Emphasize and reinforce positive aspects of care like kindness from staff, ensuring these elements remain integral to patient experience moving forward."
+                ]
+            }
+        },
+        {
+            "agent_name": "Communication Expert",
+            "response": {
+                "Communication_Quality_Communication_Expert": "Poor",
+                "Issues_Identified_Communication_Expert": [
+                    "",
+                    "Breakdown in communication due to lack of notification about the doctor's absence.",
+                    "Inconsistency between Doctoralia's service and the actual communication practice at the medical center, as evidenced by the staff being kind but Doctoralia not meeting expectations."
+                ],
+                "Suggested_Improvements_Communication_Expert": [
+                    "",
+                    "Implement direct contact or push notifications when there are schedule changes to ensure timely updates for patients.",
+                    "Review and revise Doctoralia's service standards to align with patient expectations and improve communication quality."
+                ],
+                "Final_Recommendation_Communication_Expert": "Enhance communication strategies by leveraging technology and revising service standards to provide a more seamless experience, while maintaining the kindness of staff as integral components."
+            }
+        },
+        {
+            "agent_name": "Manager and Advisor",
+            "response": {
+                "Key_Issues_Manager_and_Advisor": [
+                    "",
+                    "Breakdown in communication due to lack of notification about the doctor's absence.",
+                    "Inconsistency between Doctoralia's service and the actual communication practice at the medical center."
+                ],
+                "Recommendations_Manager_and_Advisor": [
+                    "",
+                    "Implement direct contact or push notifications when there are schedule changes to ensure timely updates for patients.",
+                    "Review and revise Doctoralia's service standards to align with patient expectations and improve communication quality."
+                ],
+                "Final_Recommendation_Manager_and_Advisor": "Enhance communication strategies by leveraging technology and revising service standards to provide a more seamless experience."
+            }
+        }
+    ]
+}

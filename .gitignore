@@ -1,25 +1,29 @@
-# Ignorar arquivos de sistema
+# Ignore system files
 .DS_Store
 Thumbs.db
 
-# Ignorar arquivos de log
+# Ignore log files
 *.log
 
-# Ignorar ambientes virtuais
+# Ignore virtual environments
 .venv/
 
-# Ignorar arquivos de configuração do IDE
+# Ignore IDE configuration files
 .vscode/
 .idea/
 
-# Ignorar dependências
+# Ignore dependencies
 node_modules/
 
-# Ignorar arquivos de build
+# Ignore build files
 /dist/
 /build/
 
-# Ignorar arquivos temporários
+# Ignore temporary files
 *.tmp
 *.temp
 
+# Ignore Python bytecode and cache directories
+__pycache__/
+*.pyc
+*.pyo
