@@ -143,7 +143,7 @@ class RAGBot:
                 {"role": "user", "content": prompt}  # User's prompt and context
             ],
             "temperature": 0.4,
-            "max_tokens": 300,
+            "max_tokens": 400,
             "stream": False
         }
 
