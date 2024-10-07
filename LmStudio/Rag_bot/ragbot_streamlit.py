@@ -6,6 +6,7 @@ from sentence_transformers import SentenceTransformer
 import faiss
 import plotly.graph_objects as go
 from functools import lru_cache
+import datetime
 
 
 class RAGBot:
@@ -24,33 +25,25 @@ class RAGBot:
         self.index = None
         self.chunks = []
         self.conversation_history = []
+        self.initialization_done = False
 
     @st.cache_data
     def load_data(_self):
-        all_text = ""
-        success_message = ""
         try:
             if os.path.exists(_self.consolidated_path) and os.path.getsize(_self.consolidated_path) > 0:
                 with open(_self.consolidated_path, 'r', encoding='utf-8') as file:
                     all_text = file.read()
-                success_message = f"Successfully loaded data from {
-                    _self.consolidated_path}"
             else:
-                raise FileNotFoundError(
-                    f"File {_self.consolidated_path} not found or is empty.")
+                raise FileNotFoundError(f"File {_self.consolidated_path} not found or is empty.")
         except FileNotFoundError as e:
             all_text = "This is a fallback text for demonstration purposes. The actual consolidated text file could not be loaded."
-            success_message = f"Warning: {str(e)} Using fallback text."
         except Exception as e:
             all_text = "Error occurred. Using fallback text for demonstration."
-            success_message = f"Error: An unexpected error occurred while loading the file: {
-                str(e)}"
 
         if not all_text:
             all_text = "Fallback text for empty file scenario."
-            success_message = "Warning: The loaded text is empty. Using fallback text."
 
-        return all_text, success_message
+        return all_text
 
     @st.cache_data
     def split_text_into_chunks(_self, text):
@@ -97,7 +90,7 @@ class RAGBot:
             return "neutral"
 
     def summarize_expert_feedback(self):
-        text, _ = self.load_data()
+        text = self.load_data()
         summary = {expert: {"positive": [], "improvement": []} for expert in ["PatientExperienceExpert",
                                                                               "HealthITProcessExpert", "ClinicalPsychologist", "CommunicationExpert", "ManagerAndAdvisor"]}
 
@@ -115,7 +108,7 @@ class RAGBot:
         return summary
 
     def extract_patient_feedback(self):
-        text, _ = self.load_data()
+        text = self.load_data()
         patient_feedback = {
             "positive": [],
             "negative": []
@@ -150,14 +143,23 @@ class RAGBot:
 
         return patient_feedback
 
+    def get_time_appropriate_greeting(self):
+        current_hour = datetime.datetime.now().hour
+        if 5 <= current_hour < 12:
+            return "Good morning"
+        elif 12 <= current_hour < 18:
+            return "Good afternoon"
+        else:
+            return "Good evening"
+
     @st.cache_data
     def call_llm(_self, query, context_chunks, conversation_history, structured=False):
         system_message = {
             "role": "system",
             "content": (
-                "You are 'your healthcare professional coach' representing a team of experts including "
-                "PatientExperienceExpert, HealthITProcessExpert, ClinicalPsychologist, CommunicationExpert, and ManagerAndAdvisor. "
-                "Provide brief, direct, and actionable advice based on the collective feedback from these experts. "
+                "You are 'your AI Healthcare Professional Coach' representing a team of AI experts including "
+                "AI Patient Experience Expert, AI Health & IT Process Expert, AI Clinical Psychologist, AI Communication Expert, and AI Manager and Advisor. "
+                "Provide brief, direct, and actionable advice based on the collective feedback from these AI experts. "
                 "Address the user's specific questions without repeating them. "
                 "Offer clear, factual responses and professional guidance based only on the information given. "
                 "Ensure you accurately reflect both positive feedback and areas for improvement. "
@@ -169,96 +171,113 @@ class RAGBot:
         patient_feedback = _self.extract_patient_feedback()
 
         expert_areas = {
-            "communication": "CommunicationExpert",
-            "process": "HealthITProcessExpert",
-            "patient experience": "PatientExperienceExpert",
-            "psychology": "ClinicalPsychologist",
-            "management": "ManagerAndAdvisor"
+            "communication": "AI CommunicationExpert",
+            "process": "AI HealthITProcessExpert",
+            "patient experience": "AI PatientExperienceExpert",
+            "psychology": "AI ClinicalPsychologist",
+            "management": "AI ManagerAndAdvisor"
         }
 
         filtered_expert_summary = expert_summary
         for area, expert in expert_areas.items():
             if area in query.lower():
-                filtered_expert_summary = {expert: expert_summary[expert]}
+                filtered_expert_summary = {expert: expert_summary[expert.replace("AI ", "")]}
                 break
 
-        context_combined = "Expert Feedback Summary:\n"
+        context_combined = "AI Expert Feedback Summary:\n"
         for expert, feedback in filtered_expert_summary.items():
             context_combined += f"{expert}:\n"
-            context_combined += "  Positive: " + \
-                "; ".join(feedback["positive"]) + "\n"
-            context_combined += "  Areas for Improvement: " + \
-                "; ".join(feedback["improvement"]) + "\n\n"
+            context_combined += "  Positive: " + "; ".join(feedback["positive"]) + "\n"
+            context_combined += "  Areas for Improvement: " + "; ".join(feedback["improvement"]) + "\n\n"
 
         context_combined += "Patient Feedback:\n"
-        context_combined += "  Positive:\n" + \
-            "\n".join(
-                [f"    - {feedback}" for feedback in patient_feedback["positive"]]) + "\n"
-        context_combined += "  Negative:\n" + \
-            "\n".join(
-                [f"    - {feedback}" for feedback in patient_feedback["negative"]]) + "\n\n"
+        context_combined += "  Positive:\n" + "\n".join([f"    - {feedback}" for feedback in patient_feedback["positive"]]) + "\n"
+        context_combined += "  Negative:\n" + "\n".join([f"    - {feedback}" for feedback in patient_feedback["negative"]]) + "\n\n"
 
-        context_combined += f"Additional Context:\n" + \
-            "\n".join(context_chunks)
+        context_combined += f"Additional Context:\n" + "\n".join(context_chunks)
 
         emotional_state = _self.check_emotional_cues(query)
 
-        history_context = "\n".join(
-            [f"{msg['role']}: {msg['content']}" for msg in conversation_history[-10:]])
+        history_context = "\n".join([f"{msg['role']}: {msg['content']}" for msg in conversation_history[-10:]])
 
-        if query.lower().strip().split()[0] in ['hello', 'hi', 'hey', 'greetings']:
-            prompt = f"The user said: {query}. Respond with a professional greeting and ask how you can assist with their healthcare professional development today. Mention that you represent a team of experts including PatientExperienceExpert, HealthITProcessExpert, ClinicalPsychologist, CommunicationExpert, and ManagerAndAdvisor."
-        elif any(area in query.lower() for area in expert_areas.keys()) or "improve" in query.lower() or "guidance" in query.lower():
-            prompt = (
-                f"Context:\n{context_combined}\n\nConversation History:\n{
-                    history_context}\n\nQuestion: {query}\n"
-                "Provide a comprehensive list of areas for improvement based on the relevant expert feedback. "
-                "Structure the response by expert, clearly attributing each point to its source. "
-                "Include ALL points mentioned by the relevant expert(s), even if they are minor. "
-                "Present the list in a clear, bullet-point format, with brief explanations for each point. "
-                "After listing all improvements, summarize the key areas that need immediate attention."
-            )
-        elif "strengths" in query.lower() or "positive" in query.lower():
-            prompt = (
-                f"Context:\n{context_combined}\n\nConversation History:\n{
-                    history_context}\n\nQuestion: {query}\n"
-                "Based on the experts' feedback and previous conversation, highlight the strengths of the professional performance. "
-                "Emphasize factual observations and successful actions without assuming the user's emotional state."
-            )
-        elif "who" in query.lower() and ("told" in query.lower() or "said" in query.lower()):
-            prompt = (
-                f"Context:\n{context_combined}\n\nConversation History:\n{
-                    history_context}\n\nQuestion: {query}\n"
-                "Provide a detailed summary of what each expert said about the user's services. "
-                "Include specific feedback from PatientExperienceExpert, HealthITProcessExpert, "
-                "ClinicalPsychologist, CommunicationExpert, and ManagerAndAdvisor. "
-                "Present the information in a clear, structured format."
-            )
-        elif "feedback" in query.lower() or "patient" in query.lower():
-            prompt = (
-                f"Context:\n{context_combined}\n\nConversation History:\n{
-                    history_context}\n\nQuestion: {query}\n"
-                "Provide only the patient feedback, both positive and negative, in full without truncation. "
-                "Do not include any expert evaluations or analysis in this response. "
-                "Use the exact words from the patients' feedback. "
-                "Clearly separate and label positive and negative feedback. "
-                "If there are multiple pieces of feedback, number them for clarity. "
-                "Do not summarize or paraphrase the feedback; present it as it appears in the context."
-            )
+        for area, expert in expert_areas.items():
+            if area in query.lower():
+                prompt = (
+                    f"Context:\n{context_combined}\n\nConversation History:\n{history_context}\n\nQuestion: {query}\n"
+                    f"Focus specifically on improvements based on the {expert}'s feedback. "
+                    f"Provide a detailed list of {area}-related improvements. "
+                    "For each point, provide a brief explanation of why it's important and how it can be implemented. "
+                    f"Conclude with a summary of the top 3 {area} improvements that should be prioritized."
+                )
+                break
         else:
-            prompt = (
-                f"Context:\n{context_combined}\n\nConversation History:\n{
-                    history_context}\n\nQuestion: {query}\n"
-                "Provide a helpful response based on the given context and previous conversation. If the query is off-topic, "
-                "politely guide the conversation back to healthcare professional development. "
-                "Avoid making assumptions about the user's feelings or satisfaction level."
-            )
+            if query.lower().strip().split()[0] in ['hello', 'hi', 'hey', 'greetings']:
+                greeting = _self.get_time_appropriate_greeting()
+                prompt = f"The user said: {query}. Respond with '{greeting}' and ask how you can assist with your healthcare professional development today. Mention that you represent a team of AI experts including PatientExperienceExpert, HealthITProcessExpert, ClinicalPsychologist, CommunicationExpert, and ManagerAndAdvisor."
+            elif "process" in query.lower():
+                prompt = (
+                    f"Context:\n{context_combined}\n\nConversation History:\n{history_context}\n\nQuestion: {query}\n"
+                    "Focus specifically on process improvements based on the Health IT Process Expert's feedback. "
+                    "Provide a detailed list of process-related improvements, including appointment scheduling, "
+                    "patient flow, time management, and any other operational processes. "
+                    "For each point, provide a brief explanation of why it's important and how it can be implemented. "
+                    "Conclude with a summary of the top 3 process improvements that should be prioritized."
+                )
+            elif "communication" in query.lower():
+                prompt = (
+                    f"Context:\n{context_combined}\n\nConversation History:\n{history_context}\n\nQuestion: {query}\n"
+                    "Focus specifically on communication improvements based on the Communication Expert's feedback. "
+                    "Provide a detailed list of communication-related improvements, including patient notifications, "
+                    "follow-up procedures, and overall communication strategies. "
+                    "For each point, provide a brief explanation of why it's important and how it can be implemented. "
+                    "Conclude with a summary of the top 3 communication improvements that should be prioritized."
+                )
+            elif any(area in query.lower() for area in expert_areas.keys()) or "improve" in query.lower() or "guidance" in query.lower():
+                prompt = (
+                    f"Context:\n{context_combined}\n\nConversation History:\n{history_context}\n\nQuestion: {query}\n"
+                    "Provide a comprehensive list of areas for improvement based on the relevant AI expert feedback. "
+                    "Structure the response by AI expert, clearly attributing each point to its source. "
+                    "Include ALL points mentioned by the relevant AI expert(s), even if they are minor. "
+                    "Present the list in a clear, bullet-point format, with brief explanations for each point. "
+                    "After listing all improvements, summarize the key areas that need immediate attention."
+                )
+            elif "strengths" in query.lower() or "positive" in query.lower():
+                prompt = (
+                    f"Context:\n{context_combined}\n\nConversation History:\n{history_context}\n\nQuestion: {query}\n"
+                    "Based on the AI experts' feedback and previous conversation, highlight the strengths of the professional performance. "
+                    "Emphasize factual observations and successful actions without assuming the user's emotional state."
+                )
+            elif "who" in query.lower() and ("told" in query.lower() or "said" in query.lower()):
+                prompt = (
+                    f"Context:\n{context_combined}\n\nConversation History:\n{history_context}\n\nQuestion: {query}\n"
+                    "Provide a detailed summary of what each expert said about the user's services. "
+                    "Include specific feedback from PatientExperienceExpert, HealthITProcessExpert, "
+                    "Clinical Psychologist, Communication Expert, and Manager and Advisor. "
+                    "Present the information in a clear, structured format."
+                )
+            elif "feedback" in query.lower() or "patient" in query.lower():
+                prompt = (
+                    f"Context:\n{context_combined}\n\nConversation History:\n{history_context}\n\nQuestion: {query}\n"
+                    "Provide only the patient feedback, both positive and negative, in full without truncation. "
+                    "Do not include any AI expert evaluations or analysis in this response. "
+                    "Use the exact words from the patients' feedback. "
+                    "Clearly separate and label positive and negative feedback. "
+                    "If there are multiple pieces of feedback, number them for clarity. "
+                    "Do not summarize or paraphrase the feedback; present it as it appears in the context."
+                )
+            else:
+                prompt = (
+                    f"Context:\n{context_combined}\n\nConversation History:\n{history_context}\n\nQuestion: {query}\n"
+                    "Provide a helpful response based on the given context and previous conversation. If the query is off-topic, "
+                    "politely guide the conversation back to healthcare professional development. "
+                    "Avoid making assumptions about the user's feelings or satisfaction level. "
+                    "Remember to refer to the experts as AI experts in your response."
+                )
 
         if emotional_state != "neutral":
-            prompt += f"\nNote: The user's query suggests a {
-                emotional_state} emotional state. Consider this in your response, but avoid making assumptions. If necessary, ask for clarification about their feelings."
+            prompt += f"\nNote: The user's query suggests a {emotional_state} emotional state. Consider this in your response, but avoid making assumptions. If necessary, ask for clarification about their feelings."
 
-        prompt += " Respond concisely in 2-3 sentences unless asked for detailed feedback."
+        prompt += " Respond concisely in 2-3 sentences unless asked for detailed feedback. Always refer to the experts as AI experts in your response."
 
         payload = {
             "model": "meta-llama-3.1-8b-instruct",
@@ -292,21 +311,21 @@ class RAGBot:
         response = requests.post(_self.LM_STUDIO_API_URL, json=payload)
 
         if response.status_code == 200:
-            response_content = response.json(
-            )['choices'][0]['message']['content']
+            response_content = response.json()['choices'][0]['message']['content']
             if "improve" in query.lower() or "guidance" in query.lower() or "feedback" in query.lower() or "patient" in query.lower():
                 return response_content
             else:
                 sentences = response_content.split('.')
-                truncated_response = '. '.join(
-                    sentences[:3]) + ('.' if len(sentences) > 3 else '')
+                truncated_response = '. '.join(sentences[:3]) + ('.' if len(sentences) > 3 else '')
                 return truncated_response
         else:
             return "Error: Failed to get response from LM Studio."
 
     def initialize(self):
-        text, success_message = self.load_data()
-        st.success(success_message)
+        text = self.load_data()
+        if not hasattr(self, 'initialization_done'):
+            st.success(f"Successfully loaded data from {self.consolidated_path}")
+            self.initialization_done = True
         self.chunks = self.split_text_into_chunks(text)
         embeddings = self.generate_embeddings(self.chunks)
         self.index = self.build_faiss_index(embeddings)
@@ -460,4 +479,3 @@ if __name__ == "__main__":
 
 # to run the app, type in the terminal:
 # streamlit run LmStudio/Rag_bot/ragbot_streamlit.py
-
