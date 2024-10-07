@@ -204,10 +204,14 @@ class RAGBot:
             if area in query.lower():
                 prompt = (
                     f"Context:\n{context_combined}\n\nConversation History:\n{history_context}\n\nQuestion: {query}\n"
-                    f"Focus specifically on improvements based on the {expert}'s feedback. "
-                    f"Provide a detailed list of {area}-related improvements. "
+                    "Focus specifically on process improvements based on the AI Health IT Process Expert's feedback. "
+                    "Provide a detailed list of process-related improvements that are directly within the healthcare professional's control. "
+                    "Include areas such as appointment scheduling systems, internal patient flow management, staff time management, "
+                    "and other operational processes that the healthcare provider can directly influence. "
                     "For each point, provide a brief explanation of why it's important and how it can be implemented. "
-                    f"Conclude with a summary of the top 3 {area} improvements that should be prioritized."
+                    "Ensure all suggestions are actionable by the healthcare professional and do not rely on patient behavior changes. "
+                    "Focus on how the professional can create systems or environments that indirectly encourage desired outcomes. "
+                    "Conclude with a summary of the top 3 process improvements that should be prioritized, ensuring they are all within the professional's direct sphere of influence."
                 )
                 break
         else:
@@ -217,11 +221,14 @@ class RAGBot:
             elif "process" in query.lower():
                 prompt = (
                     f"Context:\n{context_combined}\n\nConversation History:\n{history_context}\n\nQuestion: {query}\n"
-                    "Focus specifically on process improvements based on the Health IT Process Expert's feedback. "
-                    "Provide a detailed list of process-related improvements, including appointment scheduling, "
-                    "patient flow, time management, and any other operational processes. "
+                    "Focus specifically on process improvements based on the AI Health IT Process Expert's feedback. "
+                    "Provide a detailed list of process-related improvements that are directly within the healthcare professional's control. "
+                    "Include areas such as appointment scheduling systems, internal patient flow management, staff time management, "
+                    "and other operational processes that the healthcare provider can directly influence. "
                     "For each point, provide a brief explanation of why it's important and how it can be implemented. "
-                    "Conclude with a summary of the top 3 process improvements that should be prioritized."
+                    "Ensure all suggestions are actionable by the healthcare professional and do not rely on patient behavior changes. "
+                    "Focus on how the professional can create systems or environments that indirectly encourage desired outcomes. "
+                    "Conclude with a summary of the top 3 process improvements that should be prioritized, ensuring they are all within the professional's direct sphere of influence."
                 )
             elif "communication" in query.lower():
                 prompt = (
@@ -285,8 +292,8 @@ class RAGBot:
                 system_message,
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.4,
-            "max_tokens": 400,
+            "temperature": 0.3,
+            "max_tokens": 600,
             "stream": False
         }
 
