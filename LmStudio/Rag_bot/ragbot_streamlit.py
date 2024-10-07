@@ -333,6 +333,7 @@ class RAGBot:
 
 def plot_similarity_scores(chunks, distances):
     similarity_scores = 1 / (1 + np.array(distances))
+    max_score = max(similarity_scores)
 
     fig = go.Figure(data=[go.Bar(
         x=[f"Chunk {i+1}" for i in range(len(chunks))],
@@ -343,12 +344,13 @@ def plot_similarity_scores(chunks, distances):
     )])
 
     fig.update_layout(
-        title="Similarity Scores for Retrieved Chunks",
-        # xaxis_title="Chunks",
         yaxis_title="Similarity Score",
-        yaxis_range=[0, 1],
+        yaxis_range=[0, max_score * 1.1],  # Dynamic scale
         template="plotly_dark",
-        height=400,
+        height=150,  # Reduzir a altura do gráfico
+        margin=dict(l=10, r=10, t=30, b=10),  # Reduzir as margens
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)'
     )
 
     return fig
@@ -362,26 +364,34 @@ def get_ragbot():
 
 
 def main():
-    st.set_page_config(page_title="RAGBot Healthcare Coach", layout="wide")
+    st.set_page_config(page_title="RAGBot Healthcare Coach", layout="wide", initial_sidebar_state="expanded")
     st.title("RAGBot Healthcare Professional Coach")
 
     st.markdown(
-        '''
+        """
         <style>
-        .sidebar .sidebar-content {
-            background-color: #f0f2f6;
+        /* Custom sidebar background color */
+        [data-testid="stSidebar"] {
+            background-color: #0e1525;
         }
-        .sidebar .sidebar-content .block-container {
-            padding-top: 0rem;
-            padding-bottom: 2rem;
+        
+        /* Custom chat input box color */
+        .stTextInput > div > div > input {
+            background-color: #0e1525;
+            color: white;
         }
-        .sidebar .sidebar-content .stExpander {
-            background-color: white;
-            border-radius: 4px;
-            margin-bottom: 1rem;
+        
+        /* Custom chat input box placeholder color */
+        .stTextInput > div > div > input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+        
+        /* Custom chat input box border color */
+        .stTextInput > div > div {
+            border-color: #1e2a3a;
         }
         </style>
-        ''',
+        """,
         unsafe_allow_html=True
     )
 
@@ -419,23 +429,32 @@ def main():
             {"role": "assistant", "content": response})
 
         with st.sidebar:
+            st.sidebar.markdown("""
+                <div style='background-color: #0e1117; padding: 5px; border-radius: 10px;'>
+                    <h2 style="text-align: center; font-size: 21px;">
+                        <span style="color: #1b9e4b; font-style: italic;">AI</span> 
+                        <span style="color: white;">Clinical Advisory</span> 
+                        <span style="color: #1b9e4b; font-style: italic;">Crew</span>
+                    </h2>
+                </div>
+            """, unsafe_allow_html=True)
             st.markdown(
                 """
-                <h1 style='text-align: center;'>RAGBot Analytics</h1>
+                <h3 style='text-align: center;'>RAGBot Analytics</h3>
                 """,
                 unsafe_allow_html=True
             )
-            st.markdown("---")
             with st.container():
                 # st.write("Similarity Scores Visualization")
                 fig = plot_similarity_scores(relevant_chunks, distances)
-                st.plotly_chart(fig)
+                st.plotly_chart(fig, use_container_width=True)
                 st.markdown(
-                    "This chart shows how similar each retrieved chunk is to your query. "
-                    "Higher bars indicate greater relevance to your question."
+                    "<span style='color: #35855d; font-size: 14px;'>This chart shows how similar each retrieved chunk is to your query. "
+                    "Higher bars indicate greater relevance to your question.</span>",
+                    unsafe_allow_html=True
                 )
 
-            with st.expander("Cache Statistics"):
+            with st.expander("Cache Statistics", expanded=True):
                 cache_hit_rate = (st.session_state.cache_hits / st.session_state.total_queries) * \
                     100 if st.session_state.total_queries > 0 else 0
                 st.write(f"Cache Hit Rate: {cache_hit_rate:.2f}%")
@@ -461,7 +480,7 @@ def main():
                     unsafe_allow_html=True
                 )
 
-            with st.expander("View Relevant Context"):
+            with st.expander("View Relevant Context", expanded=False):
                 st.markdown(
                     "This section shows the most relevant text chunks used to answer your query. "
                     "Each chunk is ranked by its similarity to your question."

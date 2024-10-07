@@ -1,0 +1,7 @@
+[theme]
+base = "dark"
+primaryColor = "#1b9e4b"
+backgroundColor = "#0e1525"
+secondaryBackgroundColor = "#31333F"
+textColor = "#ffffff"
+sidebarBackgroundColor = "#1E2129"  # Set the sidebar background color
