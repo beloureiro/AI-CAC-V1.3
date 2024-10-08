@@ -27,8 +27,24 @@ class RAGBot:
         self.conversation_history = []
         self.initialization_done = False
 
+    def consolidate_md_files(self):
+        all_text = ""
+        for filename in os.listdir(self.data_directory):
+            if filename.endswith(".md"):
+                file_path = os.path.join(self.data_directory, filename)
+                with open(file_path, 'r', encoding='utf-8') as file:
+                    all_text += file.read() + "\n"  # Add a newline between files for clarity
+
+        if all_text:
+            with open(self.consolidated_path, 'w', encoding='utf-8') as outfile:
+                outfile.write(all_text)
+            print(f"Consolidated text saved to {self.consolidated_path}")
+        else:
+            print("No .md files found. consolidated_text.txt was not updated.")
+
     @st.cache_data
     def load_data(_self):
+        _self.consolidate_md_files()  # Call the consolidation method before loading
         try:
             if os.path.exists(_self.consolidated_path) and os.path.getsize(_self.consolidated_path) > 0:
                 with open(_self.consolidated_path, 'r', encoding='utf-8') as file:
@@ -114,32 +130,10 @@ class RAGBot:
             "negative": []
         }
 
-        feedback_start = text.find("Patient Feedback:")
+        feedback_start = text.find("Feedback:")
         if feedback_start != -1:
-            feedback_text = text[feedback_start:]
-            feedback_lines = feedback_text.split('\n')
-
-            current_category = None
-            current_feedback = ""
-            for line in feedback_lines:
-                if line.strip().lower().startswith("positive feedback:"):
-                    if current_feedback and current_category:
-                        patient_feedback[current_category].append(
-                            current_feedback.strip())
-                    current_category = "positive"
-                    current_feedback = ""
-                elif line.strip().lower().startswith("negative feedback:"):
-                    if current_feedback and current_category:
-                        patient_feedback[current_category].append(
-                            current_feedback.strip())
-                    current_category = "negative"
-                    current_feedback = ""
-                elif line.strip() and current_category:
-                    current_feedback += " " + line.strip()
-
-            if current_feedback and current_category:
-                patient_feedback[current_category].append(
-                    current_feedback.strip())
+            feedback_text = text[feedback_start:].split('\n', 1)[1].strip()
+            patient_feedback["positive"].append(feedback_text)
 
         return patient_feedback
 
@@ -191,8 +185,10 @@ class RAGBot:
             context_combined += "  Areas for Improvement: " + "; ".join(feedback["improvement"]) + "\n\n"
 
         context_combined += "Patient Feedback:\n"
-        context_combined += "  Positive:\n" + "\n".join([f"    - {feedback}" for feedback in patient_feedback["positive"]]) + "\n"
-        context_combined += "  Negative:\n" + "\n".join([f"    - {feedback}" for feedback in patient_feedback["negative"]]) + "\n\n"
+        if patient_feedback["positive"]:
+            context_combined += f"  Positive: '{patient_feedback['positive'][0]}'\n"
+        if patient_feedback["negative"]:
+            context_combined += f"  Negative: '{patient_feedback['negative'][0]}'\n"
 
         context_combined += f"Additional Context:\n" + "\n".join(context_chunks)
 
@@ -265,11 +261,11 @@ class RAGBot:
             elif "feedback" in query.lower() or "patient" in query.lower():
                 prompt = (
                     f"Context:\n{context_combined}\n\nConversation History:\n{history_context}\n\nQuestion: {query}\n"
-                    "Provide only the patient feedback, both positive and negative, in full without truncation. "
+                    "Provide only the patient feedback in full without truncation. "
                     "Do not include any AI expert evaluations or analysis in this response. "
-                    "Use the exact words from the patients' feedback. "
-                    "Clearly separate and label positive and negative feedback. "
-                    "If there are multiple pieces of feedback, number them for clarity. "
+                    "Use the exact words from the patient's feedback. "
+                    "Present the feedback as a single quote. "
+                    "If there is no negative feedback, do not mention it. "
                     "Do not summarize or paraphrase the feedback; present it as it appears in the context."
                 )
             else:
