@@ -14,14 +14,25 @@ class FeedbackAnalyzer:
 
         # Model API configurations
         self.url = self.config['server']['url']
-        self.model = self.config['request']['lmstudio_models']['Meta-Llama-3.1-8B-Instruct-GGUF']  #--> choose the model according to the configuration file
+        self.model = self.config['request']['lmstudio_models']['Meta-Llama-3.1-8B-Instruct-GGUF']  # Choose the model according to the configuration file
         self.headers = {"Content-Type": "application/json"}
 
-    def analyze_with_agent(self, agent_prompt, max_tokens, temperature):
+    def analyze_with_agent(self, agent_prompt, max_tokens, temperature, top_k, top_p, repeat_penalty, min_p):
         # Replace the placeholder "[feedback]" with the actual feedback
         prompt_with_feedback = agent_prompt.replace("[feedback]", self.feedback)
         # Send the request to the model
-        return send_request(self.url, self.headers, self.model, prompt_with_feedback, max_tokens, temperature)
+        return send_request(
+            self.url, 
+            self.headers, 
+            self.model, 
+            prompt_with_feedback, 
+            max_tokens, 
+            temperature, 
+            top_k, 
+            top_p, 
+            repeat_penalty, 
+            min_p
+        )
 
     def run_analysis(self):
         # Dictionary to store the results of each agent
@@ -31,17 +42,21 @@ class FeedbackAnalyzer:
         for agent_name, agent_data in self.agents.items():
             print(f"Running analysis for {agent_name}...")
 
-            # Extract the prompt, max_tokens, and temperature from the YAML
+            # Extract the prompt, max_tokens, temperature, and sampling parameters from the YAML
             prompt = agent_data['prompt']
             max_tokens = agent_data.get('max_tokens')
             temperature = agent_data.get('temperature')
+            top_k = agent_data.get('top_k', 40)  # Default value if not provided in the YAML
+            top_p = agent_data.get('top_p', 0.95)
+            repeat_penalty = agent_data.get('repeat_penalty', 1.1)
+            min_p = agent_data.get('min_p', 0.05)
 
             # Check if max_tokens and temperature are defined for the agent, otherwise raise an error
             if max_tokens is None or temperature is None:
                 raise ValueError(f"Agent {agent_name} does not have 'max_tokens' or 'temperature' defined in the YAML.")
 
-            # Perform the analysis with the agent
-            result = self.analyze_with_agent(prompt, max_tokens, temperature)
+            # Perform the analysis with the agent, including sampling parameters
+            result = self.analyze_with_agent(prompt, max_tokens, temperature, top_k, top_p, repeat_penalty, min_p)
             results[agent_name] = result
 
             print(f"{agent_name} result: \n{result}\n")

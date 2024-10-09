@@ -432,15 +432,15 @@ def main():
             {"role": "assistant", "content": response})
 
         with st.sidebar:
-            st.sidebar.markdown("""
-                <div style='background-color: #0e1117; padding: 5px; border-radius: 10px;'>
-                    <h2 style="text-align: center; font-size: 21px;">
-                        <span style="color: #1b9e4b; font-style: italic;">AI</span> 
-                        <span style="color: white;">Clinical Advisory</span> 
-                        <span style="color: #1b9e4b; font-style: italic;">Crew</span>
-                    </h2>
-                </div>
-            """, unsafe_allow_html=True)
+            # st.sidebar.markdown("""
+            #     <div style='background-color: #0e1117; padding: 5px; border-radius: 10px;'>
+            #         <h2 style="text-align: center; font-size: 21px;">
+            #             <span style="color: #1b9e4b; font-style: italic;">AI</span> 
+            #             <span style="color: white;">Clinical Advisory</span> 
+            #             <span style="color: #1b9e4b; font-style: italic;">Crew</span>
+            #         </h2>
+            #     </div>
+            # """, unsafe_allow_html=True)
             st.markdown(
                 """
                 <h3 style='text-align: center;'>RAGBot Analytics</h3>

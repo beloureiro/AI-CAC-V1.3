@@ -14,19 +14,20 @@ def load_feedback(filepath):
     with open(filepath, "r", encoding="utf-8") as file:
         return file.read()
 
-def send_request(url, headers, model, prompt, max_tokens, temperature):
-    """Send a POST request to the model."""
+def send_request(url, headers, model, prompt, max_tokens, temperature, top_k, top_p, repeat_penalty, min_p):
     payload = {
         "model": model,
         "prompt": prompt,
         "max_tokens": max_tokens,
-        "temperature": temperature
+        "temperature": temperature,
+        "top_k": top_k,
+        "top_p": top_p,
+        "repeat_penalty": repeat_penalty,
+        "min_p": min_p
     }
 
-    # Make the POST request
     response = requests.post(url, headers=headers, data=json.dumps(payload))
 
-    # Check the response status
     if response.status_code == 200:
         completion = response.json()
         return completion['choices'][0]['text']
