@@ -2,7 +2,7 @@ from jinja2 import Template
 
 def render_prompt_with_template(agent_prompt, feedback):
     """Renderiza o template Jinja2 com o prompt do agente e o feedback."""
-    # Template Jinja2 fornecido
+    # Template Jinja2 completo
     jinja_template_str = """
     {{- bos_token }}
     {%- if custom_tools is defined %}
@@ -111,22 +111,25 @@ def render_prompt_with_template(agent_prompt, feedback):
         {{- '<|start_header_id|>assistant<|end_header_id|>\n\n' }}
     {%- endif %}
     """
-    
-    # Substituir a variável feedback diretamente no prompt
+
+    # Preparando o prompt com o feedback incluído
     prompt_with_feedback = agent_prompt.replace("[feedback]", feedback)
 
-    # Criar o template Jinja2
+    # Criando o template Jinja2
     template = Template(jinja_template_str)
     
-    # Dados fictícios para teste, substitua conforme necessário
+    # Contexto completo de acordo com a configuração do LMStudio
     context = {
         "bos_token": "<|begin_of_text|>",
         "builtin_tools": None,
         "messages": [{"role": "system", "content": prompt_with_feedback}],
-        "custom_tools": None
+        "custom_tools": None,
+        "tools_in_user_message": False,
+        "date_string": "26 Jul 2024",
+        "add_generation_prompt": False,
     }
     
-    # Renderizar o template com o contexto
+    # Renderizando o template com o contexto exato
     rendered_prompt = template.render(**context)
     
     return rendered_prompt

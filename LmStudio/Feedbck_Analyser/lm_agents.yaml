@@ -49,7 +49,7 @@ agents:
       Improvement_Suggestions_Healthcare_Process_Health_IT_Process_Expert:
       - [Provide suggestions for improvements based on inefficiencies or feedback]
       Avoid adding steps or generalizing unless explicitly mentioned in the patient's feedback.
-    max_tokens: 200
+    max_tokens: 1000
     temperature: 0.0
     top_k: 40
     top_p: 0.95
