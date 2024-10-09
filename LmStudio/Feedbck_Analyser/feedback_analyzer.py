@@ -65,12 +65,12 @@ agents_path = "LmStudio/Feedbck_Analyser/lm_agents.yaml"
 start_time = time.time()
 analyzer = FeedbackAnalyzer(config_path, feedback_path, agents_path)
 results = analyzer.run_analysis()
-md_file_path = save_results_to_md(results)
+md_file_path = save_results_to_md(results, analyzer.feedback)
 end_time = time.time()
 
 execution_time = end_time - start_time
 minutes, seconds = divmod(execution_time, 60)
-execution_message = f"Total execution time: {int(minutes)} minutes and {int(seconds)} seconds."
+execution_message = f"AI Clinical Advisory Crew - time spent analyzing: {int(minutes)} minutes and {int(seconds)} seconds."
 
 print(execution_message)
 with open(md_file_path, "a", encoding='utf-8') as file:

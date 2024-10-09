@@ -36,7 +36,7 @@ def send_request(url, headers, model, prompt, max_tokens, temperature, top_k, to
         print(response.text)
         return None
 
-def save_results_to_md(results):
+def save_results_to_md(results, feedback):
     """Save the analysis results to a Markdown file."""
     # Get the current date and time
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -49,13 +49,15 @@ def save_results_to_md(results):
 
     # Open the file in write mode (create or overwrite)
     with open(md_file_path, 'w', encoding='utf-8') as file:
+        # Add patient feedback at the beginning
         file.write("# Feedback Analysis Report\n\n")
+        file.write(f"Patient Feedback: {feedback}\n\n")
         file.write("This report contains the analysis results for each expert agent based on the patient's feedback.\n\n")
         
         for agent, result in results.items():
             file.write(f"## {agent}\n")
             file.write(f"{result}\n")
-
+        
     print(f"Results saved to {md_file_path}")
     
     # Return the file path for later use
