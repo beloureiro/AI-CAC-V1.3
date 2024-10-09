@@ -40,16 +40,16 @@ class FeedbackAnalyzer:
         for agent_name, agent_data in self.agents.items():
             print(f"Running analysis for {agent_name}...")
 
-            # Extract configuration from YAML
+            # Extract configuration directly from the YAML file
             prompt = agent_data['prompt']
-            max_tokens = agent_data.get('max_tokens')
-            temperature = agent_data.get('temperature')
-            top_k = agent_data.get('top_k', 40)
-            top_p = agent_data.get('top_p', 0.95)
-            repeat_penalty = agent_data.get('repeat_penalty', 1.1)
-            min_p = agent_data.get('min_p', 0.05)
+            max_tokens = agent_data['max_tokens']
+            temperature = agent_data['temperature']
+            top_k = agent_data['top_k']
+            top_p = agent_data['top_p']
+            repeat_penalty = agent_data['repeat_penalty']
+            min_p = agent_data['min_p']
 
-            # Perform the analysis with the agent
+            # Perform the analysis with the agent using parameters from YAML
             result = self.analyze_with_agent(prompt, max_tokens, temperature, top_k, top_p, repeat_penalty, min_p)
             results[agent_name] = result
 
