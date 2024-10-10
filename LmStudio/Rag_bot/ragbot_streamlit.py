@@ -288,7 +288,7 @@ class RAGBot:
                 system_message,
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.3,
+            "temperature": 0.0,
             "max_tokens": 600,
             "stream": False
         }
@@ -368,7 +368,7 @@ def get_ragbot():
 
 def main():
     st.set_page_config(page_title="RAGBot Healthcare Coach", layout="wide", initial_sidebar_state="expanded")
-    st.title("RAGBot Healthcare Professional Coach")
+    st.title("AI Skills Advisor")
 
     st.markdown(
         """
