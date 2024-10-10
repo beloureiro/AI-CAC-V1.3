@@ -2,15 +2,26 @@ import os
 import requests
 import numpy as np
 import streamlit as st
-from sentence_transformers import SentenceTransformer
 import faiss
 import plotly.graph_objects as go
 from functools import lru_cache
 import datetime
+from transformers import pipeline
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+from typing import List, Dict, Tuple, Optional
+import re
+import logging
+import json
 
+# Configuração de logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-class RAGBot:
-    LM_STUDIO_API_URL = "http://127.0.0.1:1234/v1/chat/completions"
+class EnhancedRAGBot:
+    EMBEDDING_API_URL = "http://127.0.0.1:1234/v1/embeddings"  # URL para gerar embeddings
+    CHAT_API_URL = "http://127.0.0.1:1234/v1/chat/completions"  # URL para chat
+    MAX_RETRIES = 3
+    RETRY_DELAY = 2
 
     def __init__(self, data_directory=None, consolidated_path='consolidated_text.txt', chunk_size=500):
         if data_directory is None:
@@ -21,11 +32,21 @@ class RAGBot:
         self.consolidated_path = os.path.join(
             os.path.dirname(__file__), consolidated_path)
         self.chunk_size = chunk_size
-        self.model = None
         self.index = None
         self.chunks = []
         self.conversation_history = []
         self.initialization_done = False
+        self.tfidf_vectorizer = TfidfVectorizer()  # Inicializa o vetor TF-IDF
+        self.source_documents = {}  # Dicionário para armazenar documentos de origem
+
+        # Inicialização do fact checker com tratamento de erros
+        try:
+            self.fact_checker = pipeline("zero-shot-classification", 
+                                         model="facebook/bart-large-mnli", 
+                                         device=-1)  # Use CPU
+        except Exception as e:
+            logging.error(f"Failed to initialize fact checker: {e}")
+            self.fact_checker = None
 
     def consolidate_md_files(self):
         all_text = ""
@@ -59,34 +80,62 @@ class RAGBot:
         if not all_text:
             all_text = "Fallback text for empty file scenario."
 
+        _self.source_documents = _self._load_source_documents()  # Carrega documentos de origem
+
         return all_text
+
+    def _load_source_documents(_self) -> Dict[str, str]:
+        documents = {}
+        for filename in os.listdir(_self.data_directory):
+            if filename.endswith(".md"):
+                file_path = os.path.join(_self.data_directory, filename)
+                with open(file_path, 'r', encoding='utf-8') as file:
+                    documents[filename] = file.read()  # Carrega o conteúdo dos documentos
+        return documents
 
     @st.cache_data
     def split_text_into_chunks(_self, text):
-        return [text[i:i+_self.chunk_size] for i in range(0, len(text), _self.chunk_size)]
+        # Implementa uma estratégia de divisão de texto melhorada
+        sentences = re.split(r'(?<=[.!?]) +', text)  # Divide o texto em sentenças
+        chunks = []
+        current_chunk = ""
+        for sentence in sentences:
+            if len(current_chunk) + len(sentence) <= _self.chunk_size:
+                current_chunk += sentence + " "
+            else:
+                chunks.append(current_chunk.strip())
+                current_chunk = sentence + " "
+        if current_chunk:
+            chunks.append(current_chunk.strip())
+        return chunks
 
-    @st.cache_resource
-    def load_model(_self):
-        return SentenceTransformer('all-MiniLM-L6-v2')
+    def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
+        headers = {"Content-Type": "application/json"}
+        data = {
+            "model": "nomic-embed-text-v1.5",
+            "input": texts
+        }
 
-    @st.cache_data
-    def generate_embeddings(_self, chunks):
-        model = _self.load_model()
-        return model.encode(chunks)
+        try:
+            response = requests.post(self.EMBEDDING_API_URL, headers=headers, json=data)
+            response.raise_for_status()
+            result = response.json()
+            return [item["embedding"] for item in result["data"]]
+        except Exception as e:
+            logging.error(f"Error generating embeddings: {e}")
+            return []
 
     @st.cache_resource
     def build_faiss_index(_self, embeddings):
-        embedding_dim = embeddings[0].shape[0]
+        embedding_dim = len(embeddings[0])
         index = faiss.IndexFlatL2(embedding_dim)
         index.add(np.array(embeddings))
         return index
 
-    @lru_cache(maxsize=100)
-    def retrieve_similar_chunks(_self, query, _index, _chunks):
-        model = _self.load_model()
-        query_embedding = model.encode([query])[0]
-        distances, indices = _index.search(np.array([query_embedding]), 5)
-        return [_chunks[i] for i in indices[0]], distances[0]
+    def retrieve_similar_chunks(self, query: str, top_k: int = 5) -> Tuple[List[str], List[float]]:
+        query_embedding = self.generate_embeddings([query])[0]
+        distances, indices = self.index.search(np.array([query_embedding]), top_k)
+        return [self.chunks[i] for i in indices[0]], distances[0].tolist()  # Retorna distâncias como lista
 
     def check_emotional_cues(self, query):
         positive_cues = ['happy', 'satisfied',
@@ -146,183 +195,212 @@ class RAGBot:
         else:
             return "Good evening"
 
-    @st.cache_data
-    def call_llm(_self, query, context_chunks, conversation_history, structured=False):
-        system_message = {
-            "role": "system",
-            "content": (
-                "You are 'your AI Healthcare Professional Coach' representing a team of AI experts including "
-                "AI Patient Experience Expert, AI Health & IT Process Expert, AI Clinical Psychologist, AI Communication Expert, and AI Manager and Advisor. "
-                "Provide brief, direct, and actionable advice based on the collective feedback from these AI experts. "
-                "Address the user's specific questions without repeating them. "
-                "Offer clear, factual responses and professional guidance based only on the information given. "
-                "Ensure you accurately reflect both positive feedback and areas for improvement. "
-                "If clarification is needed, ask a short, direct question."
+    def check_factual_consistency(self, response: str, context: str) -> float:
+        if self.fact_checker is None or not response or not context:
+            logging.warning("Skipping factual consistency check due to missing components.")
+            return 0.5  # Valor neutro
+
+        try:
+            input_text = f"premise: {context} hypothesis: {response}"
+            result = self.fact_checker(input_text, candidate_labels=["entailment", "contradiction"], multi_label=False)
+            entailment_score = next((item['score'] for item in result if item['label'] == 'entailment'), 0.0)
+            return entailment_score
+        except Exception as e:
+            logging.error(f"Error in factual consistency check: {e}")
+            return 0.5  # Valor neutro em caso de erro
+
+    def calculate_similarity(self, text1: str, text2: str) -> float:
+        if not text1 or not text2:
+            return 0.0
+        try:
+            vectors = self.tfidf_vectorizer.fit_transform([text1, text2])  # Calcula a similaridade usando TF-IDF
+            return cosine_similarity(vectors[0], vectors[1])[0][0]
+        except Exception as e:
+            logging.error(f"Error in similarity calculation: {e}")
+            return 0.0
+
+    def verify_response(self, response: str, context: List[str]) -> Tuple[bool, float, List[str]]:
+        if any(greeting in response.lower() for greeting in ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening']):
+            return True, 1.0, []
+
+        if not response or not context:
+            return False, 0.0, []
+
+        context_text = " ".join(context)
+        factual_score = self.check_factual_consistency(response, context_text)
+        similarity_score = self.calculate_similarity(response, context_text)
+        
+        verified = factual_score > 0.6 and similarity_score > 0.4  # Ajuste de thresholds
+        confidence = (factual_score + similarity_score) / 2
+        
+        source_docs = [filename for filename, content in self.source_documents.items() 
+                       if any(chunk in content for chunk in context)]
+        
+        return verified, confidence, source_docs
+
+    def handle_greeting(self, query):
+        greetings = ['hi', 'hello', 'hey', 'ola', 'olá', 'greetings']
+        if query.lower().strip() in greetings:
+            return (
+                f"{self.get_time_appropriate_greeting()}! I'm your AI Healthcare Professional Coach "
+                f"from the AI Clinical Advisory Crew. How can I assist you with your healthcare professional development today?"
             )
-        }
+        return None
 
-        expert_summary = _self.summarize_expert_feedback()
-        patient_feedback = _self.extract_patient_feedback()
+    def handle_identity_question(self, query):
+        identity_questions = ['who are you', 'what are you', 'tell me about yourself']
+        if any(question in query.lower() for question in identity_questions):
+            return (
+                "I am an AI Healthcare Professional Coach, part of the AI Clinical Advisory Crew. "
+                "My role is to assist healthcare professionals like you in various aspects of your practice, "
+                "including patient experience, health IT processes, clinical psychology, communication, and management. "
+                "I can provide insights, analysis, and recommendations to help you improve your professional skills and patient care. "
+                "How can I help you enhance your healthcare practice today?"
+            )
+        return None
 
-        expert_areas = {
-            "communication": "AI CommunicationExpert",
-            "process": "AI HealthITProcessExpert",
-            "patient experience": "AI PatientExperienceExpert",
-            "psychology": "AI ClinicalPsychologist",
-            "management": "AI ManagerAndAdvisor"
-        }
+    def extract_patient_feedbacks(self, chunks: List[str]) -> List[Dict[str, str]]:
+        feedbacks = []
+        for chunk in chunks:
+            feedback_matches = re.finditer(r"Patient Feedback:(.*?)(?=Patient Feedback:|$)", chunk, re.DOTALL)
+            for match in feedback_matches:
+                feedback_text = match.group(1).strip()
+                date_match = re.search(r"Date of the Patient feedback: (\d{2}-\d{2}-\d{4})", feedback_text)
+                sentiment_match = re.search(r"Sentiment_Patient_Experience_Expert: (\w+)", feedback_text)
+                
+                if feedback_text and date_match:
+                    sentiment = sentiment_match.group(1) if sentiment_match else "Not specified"
+                    feedbacks.append({
+                        "text": feedback_text,
+                        "date": date_match.group(1),
+                        "sentiment": sentiment
+                    })
+        return feedbacks
 
-        filtered_expert_summary = expert_summary
-        for area, expert in expert_areas.items():
-            if area in query.lower():
-                filtered_expert_summary = {expert: expert_summary[expert.replace("AI ", "")]}
-                break
+    def process_feedback_query(self, query: str) -> str:
+        feedbacks = self.extract_patient_feedbacks(self.chunks)
+        
+        if "raw" in query.lower() or "text" in query.lower():
+            return "\n\n".join([f"{feedback['text']}" for feedback in feedbacks])
+        
+        if "summary" in query.lower():
+            return self.summarize_feedbacks(feedbacks)
+        
+        if "sentiments" in query.lower():
+            return self.get_feedback_sentiments(feedbacks)
+        
+        # Default: retorna todos os feedbacks com detalhes
+        response = "Here are all the patient feedbacks from our database:\n\n"
+        for i, feedback in enumerate(feedbacks, 1):
+            response += f"{i}. Date: {feedback['date']}\n"
+            response += f"   Sentiment: {feedback['sentiment']}\n"
+            response += f"   {feedback['text']}\n\n"
+        return response
 
-        context_combined = "AI Expert Feedback Summary:\n"
-        for expert, feedback in filtered_expert_summary.items():
-            context_combined += f"{expert}:\n"
-            context_combined += "  Positive: " + "; ".join(feedback["positive"]) + "\n"
-            context_combined += "  Areas for Improvement: " + "; ".join(feedback["improvement"]) + "\n\n"
+    def call_llm(self, query: str, context_chunks: List[str], conversation_history: List[Dict[str, str]]) -> Tuple[str, bool, float, List[str]]:
+        feedbacks = self.extract_patient_feedbacks(context_chunks)
+        feedback_summary = json.dumps(feedbacks, indent=2)
 
-        context_combined += "Patient Feedback:\n"
-        if patient_feedback["positive"]:
-            context_combined += f"  Positive: '{patient_feedback['positive'][0]}'\n"
-        if patient_feedback["negative"]:
-            context_combined += f"  Negative: '{patient_feedback['negative'][0]}'\n"
-
-        context_combined += f"Additional Context:\n" + "\n".join(context_chunks)
-
-        emotional_state = _self.check_emotional_cues(query)
-
-        history_context = "\n".join([f"{msg['role']}: {msg['content']}" for msg in conversation_history[-10:]])
-
-        for area, expert in expert_areas.items():
-            if area in query.lower():
-                prompt = (
-                    f"Context:\n{context_combined}\n\nConversation History:\n{history_context}\n\nQuestion: {query}\n"
-                    "Focus specifically on process improvements based on the AI Health IT Process Expert's feedback. "
-                    "Provide a detailed list of process-related improvements that are directly within the healthcare professional's control. "
-                    "Include areas such as appointment scheduling systems, internal patient flow management, staff time management, "
-                    "and other operational processes that the healthcare provider can directly influence. "
-                    "For each point, provide a brief explanation of why it's important and how it can be implemented. "
-                    "Ensure all suggestions are actionable by the healthcare professional and do not rely on patient behavior changes. "
-                    "Focus on how the professional can create systems or environments that indirectly encourage desired outcomes. "
-                    "Conclude with a summary of the top 3 process improvements that should be prioritized, ensuring they are all within the professional's direct sphere of influence."
-                )
-                break
-        else:
-            if query.lower().strip().split()[0] in ['hello', 'hi', 'hey', 'greetings']:
-                greeting = _self.get_time_appropriate_greeting()
-                prompt = f"The user said: {query}. Respond with '{greeting}' and ask how you can assist with your healthcare professional development today. Mention that you represent a team of AI experts including PatientExperienceExpert, HealthITProcessExpert, ClinicalPsychologist, CommunicationExpert, and ManagerAndAdvisor."
-            elif "process" in query.lower():
-                prompt = (
-                    f"Context:\n{context_combined}\n\nConversation History:\n{history_context}\n\nQuestion: {query}\n"
-                    "Focus specifically on process improvements based on the AI Health IT Process Expert's feedback. "
-                    "Provide a detailed list of process-related improvements that are directly within the healthcare professional's control. "
-                    "Include areas such as appointment scheduling systems, internal patient flow management, staff time management, "
-                    "and other operational processes that the healthcare provider can directly influence. "
-                    "For each point, provide a brief explanation of why it's important and how it can be implemented. "
-                    "Ensure all suggestions are actionable by the healthcare professional and do not rely on patient behavior changes. "
-                    "Focus on how the professional can create systems or environments that indirectly encourage desired outcomes. "
-                    "Conclude with a summary of the top 3 process improvements that should be prioritized, ensuring they are all within the professional's direct sphere of influence."
-                )
-            elif "communication" in query.lower():
-                prompt = (
-                    f"Context:\n{context_combined}\n\nConversation History:\n{history_context}\n\nQuestion: {query}\n"
-                    "Focus specifically on communication improvements based on the Communication Expert's feedback. "
-                    "Provide a detailed list of communication-related improvements, including patient notifications, "
-                    "follow-up procedures, and overall communication strategies. "
-                    "For each point, provide a brief explanation of why it's important and how it can be implemented. "
-                    "Conclude with a summary of the top 3 communication improvements that should be prioritized."
-                )
-            elif any(area in query.lower() for area in expert_areas.keys()) or "improve" in query.lower() or "guidance" in query.lower():
-                prompt = (
-                    f"Context:\n{context_combined}\n\nConversation History:\n{history_context}\n\nQuestion: {query}\n"
-                    "Provide a comprehensive list of areas for improvement based on the relevant AI expert feedback. "
-                    "Structure the response by AI expert, clearly attributing each point to its source. "
-                    "Include ALL points mentioned by the relevant AI expert(s), even if they are minor. "
-                    "Present the list in a clear, bullet-point format, with brief explanations for each point. "
-                    "After listing all improvements, summarize the key areas that need immediate attention."
-                )
-            elif "strengths" in query.lower() or "positive" in query.lower():
-                prompt = (
-                    f"Context:\n{context_combined}\n\nConversation History:\n{history_context}\n\nQuestion: {query}\n"
-                    "Based on the AI experts' feedback and previous conversation, highlight the strengths of the professional performance. "
-                    "Emphasize factual observations and successful actions without assuming the user's emotional state."
-                )
-            elif "who" in query.lower() and ("told" in query.lower() or "said" in query.lower()):
-                prompt = (
-                    f"Context:\n{context_combined}\n\nConversation History:\n{history_context}\n\nQuestion: {query}\n"
-                    "Provide a detailed summary of what each expert said about the user's services. "
-                    "Include specific feedback from PatientExperienceExpert, HealthITProcessExpert, "
-                    "Clinical Psychologist, Communication Expert, and Manager and Advisor. "
-                    "Present the information in a clear, structured format."
-                )
-            elif "feedback" in query.lower() or "patient" in query.lower():
-                prompt = (
-                    f"Context:\n{context_combined}\n\nConversation History:\n{history_context}\n\nQuestion: {query}\n"
-                    "Provide only the patient feedback in full without truncation. "
-                    "Do not include any AI expert evaluations or analysis in this response. "
-                    "Use the exact words from the patient's feedback. "
-                    "Present the feedback as a single quote. "
-                    "If there is no negative feedback, do not mention it. "
-                    "Do not summarize or paraphrase the feedback; present it as it appears in the context."
-                )
-            else:
-                prompt = (
-                    f"Context:\n{context_combined}\n\nConversation History:\n{history_context}\n\nQuestion: {query}\n"
-                    "Provide a helpful response based on the given context and previous conversation. If the query is off-topic, "
-                    "politely guide the conversation back to healthcare professional development. "
-                    "Avoid making assumptions about the user's feelings or satisfaction level. "
-                    "Remember to refer to the experts as AI experts in your response."
-                )
-
-        if emotional_state != "neutral":
-            prompt += f"\nNote: The user's query suggests a {emotional_state} emotional state. Consider this in your response, but avoid making assumptions. If necessary, ask for clarification about their feelings."
-
-        prompt += " Respond concisely in 2-3 sentences unless asked for detailed feedback. Always refer to the experts as AI experts in your response."
+        prompt = (
+            f"You are an AI Healthcare Professional Coach, part of the AI Clinical Advisory Crew. "
+            f"Your role is to provide guidance and support for healthcare professional development. "
+            f"Here are all the patient feedbacks extracted from the database:\n{feedback_summary}\n\n"
+            f"When responding to queries about patient feedbacks, always include ALL feedbacks in your response. "
+            f"Summarize the feedbacks with their dates and sentiments. Include the total number of feedbacks and highlight any trends or notable issues. "
+            f"Context:\n{' '.join(context_chunks)}\n\n"
+            f"Conversation History:\n{self.format_conversation_history(conversation_history)}\n\n"
+            f"User Query: {query}\n\n"
+            "Please provide a comprehensive and relevant response to the user's query, staying in character as the AI Healthcare Professional Coach."
+        )
 
         payload = {
             "model": "meta-llama-3.1-8b-instruct",
             "messages": [
-                system_message,
+                {"role": "system", "content": "You are an AI Healthcare Professional Coach. Provide comprehensive, relevant, and helpful responses."},
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.0,
-            "max_tokens": 600,
+            "temperature": 0.3,
+            "max_tokens": 1000,  # Aumentado para permitir respostas mais completas
             "stream": False
         }
 
-        if structured:
-            payload["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "coaching_response",
-                    "strict": True,
-                    "schema": {
-                        "type": "object",
-                        "properties": {
-                            "improvement_suggestions": {"type": "string"},
-                            "strengths": {"type": "string"},
-                            "feedback_source": {"type": "string"}
-                        },
-                        "required": ["improvement_suggestions", "strengths"]
-                    }
-                }
+        try:
+            response = requests.post(self.CHAT_API_URL, json=payload, timeout=30)
+            response.raise_for_status()
+            response_content = response.json()['choices'][0]['message']['content']
+            return response_content, True, 1.0, [f"Feedback_{i+1}" for i in range(len(feedbacks))]
+        except Exception as e:
+            logging.error(f"Error calling LLM: {e}")
+            return self.fallback_response(query, context_chunks)
+
+    def fallback_response(self, query: str, context_chunks: List[str]) -> Tuple[str, bool, float, List[str]]:
+        greeting_response = self.handle_greeting(query)
+        if greeting_response:
+            return greeting_response, True, 1.0, []
+
+        logging.info("Using fallback response mechanism")
+        if query.lower() in ['hi', 'hello', 'hey']:
+            response = "Hello! I'm your AI Healthcare Professional Coach. How can I assist you with your healthcare professional development today?"
+        elif 'who are you' in query.lower():
+            response = "I am an AI Healthcare Professional Coach, designed to assist with various aspects of healthcare professional development. I represent a team of AI experts including Patient Experience, Health IT Process, Clinical Psychology, Communication, and Management. How can I help you today?"
+        else:
+            response = (
+                "I apologize, but I'm currently experiencing some technical difficulties. "
+                "As your AI Healthcare Professional Coach, I'm here to assist you with healthcare professional development. "
+                "Could you please rephrase your question or provide more details about what you'd like to know? "
+                "I'll do my best to help you based on the information available to me."
+            )
+        return response, True, 1.0, []
+
+    def regenerate_response(self, query: str, context_chunks: List[str], conversation_history: List[Dict[str, str]]) -> str:
+        try:
+            relevant_context = self.get_relevant_context(query, context_chunks)
+            conversation_context = self.format_conversation_history(conversation_history)
+            
+            stricter_prompt = (
+                f"Based on the following context and conversation history, provide a concise and relevant answer to the user's query. "
+                f"Context: {relevant_context}\n"
+                f"Conversation History: {conversation_context}\n"
+                f"Query: {query}\n"
+                "Respond as an AI Healthcare Professional Coach, focusing on healthcare professional development. "
+                "If the query is off-topic, politely guide the conversation back to relevant topics."
+            )
+            
+            payload = {
+                "model": "meta-llama-3.1-8b-instruct",
+                "messages": [
+                    {"role": "system", "content": "You are an AI Healthcare Professional Coach. Provide concise, relevant, and helpful responses."},
+                    {"role": "user", "content": stricter_prompt}
+                ],
+                "temperature": 0.2,  # Temperatura mais baixa para respostas mais conservadoras
+                "max_tokens": 300,   # Ajuste de max_tokens
+                "stream": False
             }
 
-        response = requests.post(_self.LM_STUDIO_API_URL, json=payload)
-
-        if response.status_code == 200:
-            response_content = response.json()['choices'][0]['message']['content']
-            if "improve" in query.lower() or "guidance" in query.lower() or "feedback" in query.lower() or "patient" in query.lower():
-                return response_content
+            response = requests.post(self.LM_STUDIO_API_URL, json=payload)
+            if response.status_code == 200:
+                return response.json()['choices'][0]['message']['content']
             else:
-                sentences = response_content.split('.')
-                truncated_response = '. '.join(sentences[:3]) + ('.' if len(sentences) > 3 else '')
-                return truncated_response
-        else:
-            return "Error: Failed to get response from LM Studio."
+                return "Error: Failed to regenerate response."
+        except Exception as e:
+            logging.error(f"Error in regenerate_response: {e}")
+            return "Error: Failed to regenerate response due to an unexpected error."
+
+    def get_relevant_context(self, query: str, context_chunks: List[str]) -> str:
+        # Use TF-IDF para encontrar os chunks mais relevantes
+        tfidf = TfidfVectorizer().fit_transform([query] + context_chunks)
+        similarities = cosine_similarity(tfidf[0:1], tfidf[1:]).flatten()
+        top_indices = similarities.argsort()[-3:][::-1]  # Pegar os 3 chunks mais relevantes
+        
+        relevant_context = "\n".join([context_chunks[i] for i in top_indices])
+        return relevant_context
+
+    def format_conversation_history(self, conversation_history: List[Dict[str, str]]) -> str:
+        formatted_history = ""
+        for message in conversation_history[-5:]:  # Limitar a 5 mensagens mais recentes
+            role = "User" if message["role"] == "user" else "Assistant"
+            formatted_history += f"{role}: {message['content']}\n"
+        return formatted_history
 
     def initialize(self):
         text = self.load_data()
@@ -332,6 +410,33 @@ class RAGBot:
         self.chunks = self.split_text_into_chunks(text)
         embeddings = self.generate_embeddings(self.chunks)
         self.index = self.build_faiss_index(embeddings)
+
+    def process_query(self, query: str) -> Tuple[str, List[str]]:
+        """Process the user's query to find relevant chunks and generate a response."""
+        # Generate embeddings for the query
+        query_embedding = self.generate_embeddings([query])
+        if not query_embedding:
+            return "Error generating embeddings for the query.", []
+
+        # Retrieve similar chunks using the FAISS index
+        if self.index is None:
+            return "Index not initialized.", []
+
+        distances, indices = self.index.search(np.array(query_embedding), 5)  # Retrieve top 5 similar chunks
+        relevant_chunks = [self.chunks[i] for i in indices[0]]
+
+        # Here you can implement logic to generate a response based on the relevant chunks
+        response = self.generate_response(relevant_chunks)
+
+        return response, relevant_chunks
+
+    def generate_response(self, relevant_chunks: List[str]) -> str:
+        """Generate a response based on the relevant chunks."""
+        # Combine relevant chunks into a single response
+        response = "Here are the relevant pieces of information:\n"
+        for chunk in relevant_chunks:
+            response += f"- {chunk}\n"
+        return response
 
 
 def plot_similarity_scores(chunks, distances):
@@ -361,14 +466,14 @@ def plot_similarity_scores(chunks, distances):
 
 @st.cache_resource
 def get_ragbot():
-    bot = RAGBot()
+    bot = EnhancedRAGBot()
     bot.initialize()
     return bot
 
 
 def main():
-    st.set_page_config(page_title="RAGBot Healthcare Coach", layout="wide", initial_sidebar_state="expanded")
-    st.title("AI Skills Advisor")
+    st.set_page_config(page_title="Enhanced RAGBot Healthcare Coach", layout="wide", initial_sidebar_state="expanded")
+    st.title("AI Skills Advisor with Enhanced Verification")
 
     st.markdown(
         """
@@ -425,17 +530,29 @@ def main():
 
         with st.chat_message("assistant", avatar=assistant_avatar_path):
             with st.spinner("Processing your query..."):
-                st.session_state.total_queries += 1
-                relevant_chunks, distances = ragbot.retrieve_similar_chunks(
-                    prompt, ragbot.index, tuple(ragbot.chunks))
-                if ragbot.retrieve_similar_chunks.cache_info().hits > st.session_state.cache_hits:
-                    st.session_state.cache_hits += 1
-                response = ragbot.call_llm(
-                    prompt, relevant_chunks, st.session_state.messages)
+                try:
+                    st.session_state.total_queries += 1
+                    relevant_chunks, distances = ragbot.retrieve_similar_chunks(prompt)  # Captura distâncias
+                    response, verified, confidence, source_docs = ragbot.call_llm(prompt, relevant_chunks, st.session_state.messages)
+                except Exception as e:
+                    logging.error(f"Error processing query: {e}")
+                    response, verified, confidence, source_docs = ragbot.fallback_response(prompt, [])
+                    distances = []  # Inicializa distances como lista vazia
+
+            if verified:
+                st.markdown(f"✅ Verified Response (Confidence: {confidence:.2f})")
+            else:
+                st.markdown(f"⚠️ Unverified Response (Confidence: {confidence:.2f})")
+            
             st.markdown(response)
+            
+            if source_docs:
+                st.markdown("**Sources:**")
+                for doc in source_docs:
+                    st.markdown(f"- {doc}")
+
         st.session_state.messages.append(
             {"role": "assistant", "content": response})
-
 
         with st.sidebar:
             # st.sidebar.markdown("""
@@ -454,14 +571,16 @@ def main():
                 unsafe_allow_html=True
             )
             with st.container():
-                # st.write("Similarity Scores Visualization")
-                fig = plot_similarity_scores(relevant_chunks, distances)
-                st.plotly_chart(fig, use_container_width=True)
-                st.markdown(
-                    "<span style='color: #35855d; font-size: 14px;'>This chart shows how similar each retrieved chunk is to your query. "
-                    "Higher bars indicate greater relevance to your question.</span>",
-                    unsafe_allow_html=True
-                )
+                if distances:  # Verifica se há distâncias para plotar
+                    fig = plot_similarity_scores(relevant_chunks, distances)
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.markdown(
+                        "<span style='color: #35855d; font-size: 14px;'>This chart shows how similar each retrieved chunk is to your query. "
+                        "Higher bars indicate greater relevance to your question.</span>",
+                        unsafe_allow_html=True
+                    )
+                else:
+                    st.warning("No similarity scores available for this query.")
 
             with st.expander("Cache Statistics", expanded=True):
                 cache_hit_rate = (st.session_state.cache_hits / st.session_state.total_queries) * \
@@ -494,12 +613,15 @@ def main():
                     "This section shows the most relevant text chunks used to answer your query. "
                     "Each chunk is ranked by its similarity to your question."
                 )
-                for i, (chunk, distance) in enumerate(zip(relevant_chunks, distances), 1):
-                    similarity_score = 1 / (1 + distance)
-                    st.markdown(
-                        f"**Chunk {i}:** (Similarity Score: {similarity_score:.2f})")
-                    st.write(chunk)
-                    st.markdown("---")
+                if distances:  # Verifica se há distâncias para exibir
+                    for i, (chunk, distance) in enumerate(zip(relevant_chunks, distances), 1):
+                        similarity_score = 1 / (1 + distance)
+                        st.markdown(
+                            f"**Chunk {i}:** (Similarity Score: {similarity_score:.2f})")
+                        st.write(chunk)
+                        st.markdown("---")
+                else:
+                    st.warning("No relevant context available for this query.")
 
 
 if __name__ == "__main__":
