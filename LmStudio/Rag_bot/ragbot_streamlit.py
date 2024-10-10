@@ -409,16 +409,21 @@ def main():
     if "total_queries" not in st.session_state:
         st.session_state.total_queries = 0
 
+    # Define o caminho para os avatares
+    user_avatar_path = "LmStudio/Rag_bot/assets/profile-picture.png"
+    assistant_avatar_path = "LmStudio/Rag_bot/assets/neural.png"
+
     for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
+        avatar_path = user_avatar_path if message["role"] == "user" else assistant_avatar_path
+        with st.chat_message(message["role"], avatar=avatar_path):
             st.markdown(message["content"])
 
     if prompt := st.chat_input("Ask your healthcare coach a question:"):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
+        with st.chat_message("user", avatar=user_avatar_path):
             st.markdown(prompt)
 
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar=assistant_avatar_path):
             with st.spinner("Processing your query..."):
                 st.session_state.total_queries += 1
                 relevant_chunks, distances = ragbot.retrieve_similar_chunks(
@@ -430,6 +435,7 @@ def main():
             st.markdown(response)
         st.session_state.messages.append(
             {"role": "assistant", "content": response})
+
 
         with st.sidebar:
             # st.sidebar.markdown("""
