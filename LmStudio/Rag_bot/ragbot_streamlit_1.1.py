@@ -220,12 +220,20 @@ class EnhancedRAGBot:
         return None
 
     def handle_identity_question(self, query):
-        identity_questions = ['who are you', 'what are you', 'tell me about yourself']
+        identity_questions = ['who are you', 'what are you', 'tell me about yourself', 'what can you do']
         if any(question in query.lower() for question in identity_questions):
             return (
-                "I am the AI-Skills Advisor, dedicated to supporting healthcare professionals. "
-                "My role involves assisting with patient experience, health IT processes, clinical psychology, "
-                "communication, and management. How can I help enhance your healthcare practice today?"
+                "I am the AI-Skills Advisor, a key component of the AI Clinical Advisory Crew. My role is to provide "
+                "continuous, data-driven support to healthcare professionals like yourself. Here's what I can do for you:\n\n"
+                "1. Analyze patient feedback and generate insights to improve care quality.\n"
+                "2. Identify opportunities to enhance workflows and processes in healthcare delivery.\n"
+                "3. Offer communication strategies to improve patient-provider interactions.\n"
+                "4. Provide psychological insights for better post-consultation patient care.\n"
+                "5. Deliver managerial overviews and summaries of patient feedback.\n"
+                "6. Offer personalized recommendations for professional development.\n"
+                "7. Provide instant, 24/7 access to AI-driven guidance and support.\n\n"
+                "My goal is to help you excel in your healthcare practice by leveraging AI-powered insights "
+                "and continuous learning. How can I assist you in improving your professional skills today?"
             )
         return None
 
@@ -303,13 +311,17 @@ class EnhancedRAGBot:
         if greeting_response:
             return greeting_response, True, 1.0, []
 
+        # Check for identity question
+        identity_response = self.handle_identity_question(query)
+        if identity_response:
+            return identity_response, True, 1.0, []
+
         system_prompt = (
             "You are the AI-Skills Advisor, an AI assistant focused on healthcare professional development. "
             "Your purpose is to provide accurate and tailored responses to improve the user's skills. "
             "Maintain this identity and provide responses without creating names or irrelevant details."
         )
         
-        # Build the user prompt based on the type of query
         user_prompt = self.build_user_prompt(query, context_chunks)
 
         payload = {
@@ -344,14 +356,16 @@ class EnhancedRAGBot:
         if self.is_greeting(query):
             return (
                 f"The user has greeted you with '{query}'. Respond with a warm, professional greeting "
-                f"and briefly introduce yourself as the AI-Skills Advisor. Ask how you can assist them "
-                f"with their professional development in healthcare today."
+                f"and briefly introduce yourself as the AI-Skills Advisor, part of the AI Clinical Advisory Crew. "
+                f"Ask how you can assist them with their professional development in healthcare today."
             )
         elif self.is_identity_question(query):
             return (
-                f"The user has asked '{query}'. Provide a concise explanation of your role as the AI-Skills Advisor. "
-                f"Emphasize your ability to support healthcare professionals in their development and "
-                f"offer to assist with any specific areas they'd like to focus on."
+                f"The user has asked '{query}'. Provide a comprehensive explanation of your role as the AI-Skills Advisor, "
+                f"part of the AI Clinical Advisory Crew. Emphasize your capabilities in analyzing patient feedback, "
+                f"improving healthcare processes, enhancing communication, providing psychological insights, "
+                f"and offering continuous professional development support. Offer to assist with any specific areas "
+                f"they'd like to focus on."
             )
         elif "feedback" in query.lower():
             feedbacks = self.extract_patient_feedbacks(self.chunks)
@@ -359,14 +373,15 @@ class EnhancedRAGBot:
             return (
                 f"The user has requested patient feedback. Here are all the patient feedbacks extracted from the database:\n{feedback_summary}\n\n"
                 f"Provide a concise summary of the feedback, including the number of feedbacks, dates, and key points. "
-                f"Do not include any additional analysis or comments."
+                f"Offer insights on how this feedback can be used for professional development."
             )
         else:
             return (
                 f"The user has asked: '{query}'. Provide a response that focuses on their professional growth "
                 f"and addresses their specific query. If relevant, incorporate insights from the following context: "
                 f"{' '.join(context_chunks)}\n\n"
-                f"Maintain a supportive and professional tone, offering guidance and resources tailored to healthcare professionals."
+                f"Maintain a supportive and professional tone, offering guidance and resources tailored to healthcare professionals. "
+                f"Remember to emphasize your role as part of the AI Clinical Advisory Crew, providing continuous, data-driven support."
             )
 
     def is_greeting(self, query: str) -> bool:
@@ -379,13 +394,33 @@ class EnhancedRAGBot:
 
     def fallback_response(self, query: str, context_chunks: List[str]) -> Tuple[str, bool, float, List[str]]:
         logging.info("Using fallback response mechanism")
+        
         if self.is_greeting(query):
-            response = "Hello! I'm your AI-Skills Advisor. How can I assist you today with your healthcare professional development?"
+            time_based_greeting = self.get_time_appropriate_greeting()
+            response = f"{time_based_greeting}! I'm your AI-Skills Advisor, part of the AI Clinical Advisory Crew. How can I assist you with your healthcare professional development today?"
+        elif self.is_identity_question(query):
+            response = (
+                "I am the AI-Skills Advisor, a key component of the AI Clinical Advisory Crew. My role is to provide "
+                "continuous, data-driven support to healthcare professionals like yourself. Here's what I can do for you:\n\n"
+                "1. Analyze patient feedback and generate insights to improve care quality.\n"
+                "2. Identify opportunities to enhance workflows and processes in healthcare delivery.\n"
+                "3. Offer communication strategies to improve patient-provider interactions.\n"
+                "4. Provide psychological insights for better post-consultation patient care.\n"
+                "5. Deliver managerial overviews and summaries of patient feedback.\n"
+                "6. Offer personalized recommendations for professional development.\n"
+                "7. Provide instant, 24/7 access to AI-driven guidance and support.\n\n"
+                "My goal is to help you excel in your healthcare practice by leveraging AI-powered insights "
+                "and continuous learning. How can I assist you in improving your professional skills today?"
+            )
         else:
             response = (
-                "I'm here to help with your professional growth. Could you refine your query? "
-                "For example, you can ask about specific feedback by mentioning a date or a type, like 'positive feedback'."
+                "I apologize, but I'm currently experiencing some technical difficulties. As your AI-Skills Advisor, "
+                "I'm here to help with your professional growth in healthcare. While I work on resolving this issue, "
+                "could you please rephrase your query? I'm particularly equipped to assist with analyzing patient feedback, "
+                "improving healthcare processes, enhancing communication strategies, and offering personalized professional "
+                "development recommendations. What specific area of your healthcare practice would you like to focus on today?"
             )
+        
         return response, True, 1.0, []
 
     def regenerate_response(self, query: str, context_chunks: List[str], conversation_history: List[Dict[str, str]]) -> str:
@@ -451,10 +486,20 @@ class EnhancedRAGBot:
 
     def process_query(self, query: str) -> Tuple[str, List[str]]:
         """Process the user's query to find relevant chunks and generate a response."""
-        # Generate embeddings for the query
-        response = self.generate_response(query)  # Generate response using RAG
-        self.add_to_memory(query, response)  # Store query and response in memory
-        return response, []  # Return response
+        # Check if the query is in the cache
+        cached_response = self.retrieve_from_memory(query)
+        if cached_response:
+            st.session_state.cache_hits += 1
+            return cached_response[0][1], []  # Return the cached response
+
+        # If not in cache, generate a new response
+        relevant_chunks, _ = self.retrieve_similar_chunks(query)
+        response, _, _, _ = self.call_llm(query, relevant_chunks, [])
+        
+        # Store the new response in memory
+        self.add_to_memory(query, response)
+        
+        return response, []
 
     def calibrate_confidence(self, response: str, confidence: float) -> str:
         if confidence > 0.8:
@@ -667,8 +712,7 @@ def main():
 
             # Mantenha as estatísticas de cache existentes
             with st.expander("Cache Statistics", expanded=True):
-                cache_hit_rate = (st.session_state.cache_hits / st.session_state.total_queries) * \
-                    100 if st.session_state.total_queries > 0 else 0
+                cache_hit_rate = (st.session_state.cache_hits / st.session_state.total_queries) * 100 if st.session_state.total_queries > 0 else 0
                 st.write(f"Cache Hit Rate: {cache_hit_rate:.2f}%")
                 st.markdown(
                     "<small>Percentage of queries answered using cached results. "
@@ -707,6 +751,19 @@ def main():
                         st.markdown("---")
                 else:
                     st.warning("No relevant context available for this query.")
+
+
+def update_cache_statistics():
+    if "cache_hits" not in st.session_state:
+        st.session_state.cache_hits = 0
+    if "total_queries" not in st.session_state:
+        st.session_state.total_queries = 0
+    
+    st.session_state.total_queries += 1
+    
+    cache_hit_rate = (st.session_state.cache_hits / st.session_state.total_queries) * 100 if st.session_state.total_queries > 0 else 0
+    
+    return cache_hit_rate
 
 
 if __name__ == "__main__":
