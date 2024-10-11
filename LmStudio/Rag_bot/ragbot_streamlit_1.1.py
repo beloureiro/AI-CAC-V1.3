@@ -215,10 +215,8 @@ class EnhancedRAGBot:
     def handle_greeting(self, query):
         greetings = ['hi', 'hello', 'hey', 'ola', 'olá', 'greetings']
         if query.lower().strip() in greetings:
-            return (
-                f"{self.get_time_appropriate_greeting()}! I'm your AI-Skills Advisor, "
-                f"here to support your professional development in healthcare. How can I assist you today?"
-            )
+            time_based_greeting = self.get_time_appropriate_greeting()
+            return f"{time_based_greeting}! I'm your AI-Skills Advisor. How can I assist you with your healthcare professional development today?"
         return None
 
     def handle_identity_question(self, query):
@@ -300,13 +298,18 @@ class EnhancedRAGBot:
         return generated_text[0]['generated_text']
 
     def call_llm(self, query: str, context_chunks: List[str], conversation_history: List[Dict[str, str]]) -> Tuple[str, bool, float, List[str]]:
+        # Check for greeting first
+        greeting_response = self.handle_greeting(query)
+        if greeting_response:
+            return greeting_response, True, 1.0, []
+
         system_prompt = (
             "You are the AI-Skills Advisor, an AI assistant focused on healthcare professional development. "
             "Your purpose is to provide accurate and tailored responses to improve the user's skills. "
             "Maintain this identity and provide responses without creating names or irrelevant details."
         )
         
-        # Construir o prompt do usuário com base no tipo de consulta
+        # Build the user prompt based on the type of query
         user_prompt = self.build_user_prompt(query, context_chunks)
 
         payload = {
@@ -315,8 +318,8 @@ class EnhancedRAGBot:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            "temperature": 0.2,  # Restringe a criatividade
-            "max_tokens": 500,    # Limita o comprimento da resposta
+            "temperature": 0.2,
+            "max_tokens": 500,
             "stream": False
         }
 
@@ -328,12 +331,10 @@ class EnhancedRAGBot:
             response_content = response.json()['choices'][0]['message']['content']
             logging.debug(f"LLM Response: {response_content}")
 
-            # Calcular a confiança baseada na similaridade dos chunks
             chunk_embeddings = self.st_model.encode(context_chunks)
             query_embedding = self.st_model.encode([query])[0]
             similarities = cosine_similarity([query_embedding], chunk_embeddings)[0]
             
-            # Retornar similaridades ao invés de confiança
             return response_content, True, similarities, []
         except Exception as e:
             logging.error(f"Error calling LLM: {e}")
@@ -379,7 +380,7 @@ class EnhancedRAGBot:
     def fallback_response(self, query: str, context_chunks: List[str]) -> Tuple[str, bool, float, List[str]]:
         logging.info("Using fallback response mechanism")
         if self.is_greeting(query):
-            response = "Hello! I'm your AI-Skills Advisor. How can I assist you today with your healthcare development?"
+            response = "Hello! I'm your AI-Skills Advisor. How can I assist you today with your healthcare professional development?"
         else:
             response = (
                 "I'm here to help with your professional growth. Could you refine your query? "
