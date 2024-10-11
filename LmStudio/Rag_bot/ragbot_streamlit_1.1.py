@@ -13,7 +13,9 @@ import re
 import logging
 import json
 from rank_bm25 import BM25Okapi
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, CrossEncoder
+from chromadb import Client
+from bert_score import score
 
 # Configuração de logging mais detalhada
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -42,6 +44,10 @@ class EnhancedRAGBot:
         self.bm25 = None  # Adiciona BM25 para recuperação
         self.st_model = None  # Adiciona modelo de SentenceTransformer
         self.conversation_memory = []  # Memória de conversa
+        self.model = SentenceTransformer('all-MiniLM-L6-v2')  # Load sentence transformer model
+        self.cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-12-v2')  # Load Cross-Encoder for ranking
+        self.client = Client()  # Ajuste a inicialização do client
+        self.collection = self.client.get_or_create_collection("chat_history")  # Create collection for chat history
 
     def consolidate_md_files(self):
         all_text = ""
@@ -105,20 +111,7 @@ class EnhancedRAGBot:
         return chunks
 
     def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
-        headers = {"Content-Type": "application/json"}
-        data = {
-            "model": "nomic-embed-text-v1.5",
-            "input": texts
-        }
-
-        try:
-            response = requests.post(self.EMBEDDING_API_URL, headers=headers, json=data)
-            response.raise_for_status()
-            result = response.json()
-            return [item["embedding"] for item in result["data"]]
-        except Exception as e:
-            logging.error(f"Error generating embeddings: {e}")
-            return []
+        return self.model.encode(texts, convert_to_tensor=False)  # Use sentence transformer for embeddings
 
     @st.cache_resource
     def build_faiss_index(_self, embeddings):
@@ -128,18 +121,9 @@ class EnhancedRAGBot:
         return index
 
     def retrieve_similar_chunks(self, query: str, top_k: int = 3) -> Tuple[List[str], List[float]]:
-        bm25_scores = self.bm25.get_scores(query)
-        bm25_top_k = np.argsort(bm25_scores)[-top_k:][::-1]
-        query_embedding = self.st_model.encode([query])[0]
-        chunk_embeddings = self.st_model.encode(self.chunks)
-        dense_scores = np.dot(chunk_embeddings, query_embedding)
-        dense_top_k = np.argsort(dense_scores)[-top_k:][::-1]
-
-        combined_indices = list(set(bm25_top_k) & set(dense_top_k))  # Ajuste para uma interseção mais estrita
-        combined_scores = [dense_scores[i] for i in combined_indices if dense_scores[i] > 0.5]  # Ajuste de limiar
-
-        top_indices = sorted(range(len(combined_scores)), key=lambda i: combined_scores[i], reverse=True)[:top_k]
-        return [self.chunks[i] for i in top_indices], [combined_scores[i] for i in top_indices]
+        query_embedding = self.model.encode([query], convert_to_tensor=False)  # Get query embedding
+        D, I = self.index.search(np.array(query_embedding), top_k)  # Use Faiss for similarity search
+        return [self.chunks[i] for i in I[0]], D[0].tolist()  # Return chunks and distances
 
     def check_emotional_cues(self, query):
         positive_cues = ['happy', 'satisfied',
@@ -286,13 +270,34 @@ class EnhancedRAGBot:
             return feedback_response
         return "I couldn't find any relevant patient feedback based on your query. Could you specify a date or type of feedback?"
 
-    def add_to_memory(self, text: str, role: str):
-        self.conversation_memory.append({"text": text, "role": role})
-        if len(self.conversation_memory) > 10:  # Mantenha apenas as últimas 10 interações
-            self.conversation_memory.pop(0)
+    def add_to_memory(self, query: str, response: str):
+        query_embedding = self.model.encode([query], convert_to_tensor=False)  # Get embedding for query
+        self.collection.add_documents(embeddings=query_embedding, metadatas={"query": query, "response": response})  # Store in ChromaDB
 
-    def get_conversation_context(self) -> str:
-        return "\n".join([f"{item['role']}: {item['text']}" for item in self.conversation_memory])
+    def retrieve_from_memory(self, query: str, k: int = 3) -> List[Tuple[str, str]]:
+        query_embedding = self.model.encode([query], convert_to_tensor=False)  # Get embedding for query
+        results = self.collection.query(query_embedding, k=k)  # Query ChromaDB
+        return [(doc['metadata']['query'], doc['metadata']['response']) for doc in results['documents']]  # Return past conversations
+
+    def calculate_bert_score(self, response: str, context: str) -> float:
+        P, R, F1 = score([response], [context], model_type='roberta-large')  # Calculate BERTScore
+        return F1.item()
+
+    def calibrate_response(self, response: str, context: str) -> str:
+        confidence = self.calculate_bert_score(response, context)  # Get confidence score
+        if confidence > 0.8:
+            return response
+        elif confidence > 0.6:
+            return f"According to my analysis, it is likely that {response}"
+        else:
+            return f"I'm not entirely certain, but it seems that {response}"
+
+    def generate_response(self, query: str) -> str:
+        relevant_docs = self.retrieve_and_rank(query)  # Retrieve and rank relevant documents
+        context = " ".join(relevant_docs)  # Combine context
+        input_text = f"Question: {query}\nContext: {context}\nAnswer:"
+        generated_text = self.generator_pipeline(input_text, max_length=200, num_return_sequences=1)  # Generate response
+        return generated_text[0]['generated_text']
 
     def call_llm(self, query: str, context_chunks: List[str], conversation_history: List[Dict[str, str]]) -> Tuple[str, bool, float, List[str]]:
         system_prompt = (
@@ -301,10 +306,8 @@ class EnhancedRAGBot:
             "Maintain this identity and provide responses without creating names or irrelevant details."
         )
         
-        conversation_context = self.get_conversation_context()
-        
-        # Construa o prompt do usuário com base no tipo de consulta
-        user_prompt = self.build_user_prompt(query, conversation_context, context_chunks)
+        # Construir o prompt do usuário com base no tipo de consulta
+        user_prompt = self.build_user_prompt(query, context_chunks)
 
         payload = {
             "model": "meta-llama-3.1-8b-instruct",
@@ -330,39 +333,35 @@ class EnhancedRAGBot:
             query_embedding = self.st_model.encode([query])[0]
             similarities = cosine_similarity([query_embedding], chunk_embeddings)[0]
             
-            # Return similarities instead of confidence
+            # Retornar similaridades ao invés de confiança
             return response_content, True, similarities, []
         except Exception as e:
             logging.error(f"Error calling LLM: {e}")
             return self.fallback_response(query, context_chunks)
 
-    def build_user_prompt(self, query: str, conversation_context: str, context_chunks: List[str]) -> str:
+    def build_user_prompt(self, query: str, context_chunks: List[str]) -> str:
         if self.is_greeting(query):
             return (
-                f"Conversation history:\n{conversation_context}\n\n"
                 f"The user has greeted you with '{query}'. Respond with a warm, professional greeting "
                 f"and briefly introduce yourself as the AI-Skills Advisor. Ask how you can assist them "
                 f"with their professional development in healthcare today."
             )
         elif self.is_identity_question(query):
             return (
-                f"Conversation history:\n{conversation_context}\n\n"
                 f"The user has asked '{query}'. Provide a concise explanation of your role as the AI-Skills Advisor. "
                 f"Emphasize your ability to support healthcare professionals in their development and "
                 f"offer to assist with any specific areas they'd like to focus on."
             )
-        elif "patient feedback" in query.lower():
+        elif "feedback" in query.lower():
             feedbacks = self.extract_patient_feedbacks(self.chunks)
             feedback_summary = json.dumps(feedbacks, indent=2)
             return (
-                f"Conversation history:\n{conversation_context}\n\n"
                 f"The user has requested patient feedback. Here are all the patient feedbacks extracted from the database:\n{feedback_summary}\n\n"
                 f"Provide a concise summary of the feedback, including the number of feedbacks, dates, and key points. "
                 f"Do not include any additional analysis or comments."
             )
         else:
             return (
-                f"Conversation history:\n{conversation_context}\n\n"
                 f"The user has asked: '{query}'. Provide a response that focuses on their professional growth "
                 f"and addresses their specific query. If relevant, incorporate insights from the following context: "
                 f"{' '.join(context_chunks)}\n\n"
@@ -452,29 +451,9 @@ class EnhancedRAGBot:
     def process_query(self, query: str) -> Tuple[str, List[str]]:
         """Process the user's query to find relevant chunks and generate a response."""
         # Generate embeddings for the query
-        query_embedding = self.generate_embeddings([query])
-        if not query_embedding:
-            return "Error generating embeddings for the query.", []
-
-        # Retrieve similar chunks using the FAISS index
-        if self.index is None:
-            return "Index not initialized.", []
-
-        distances, indices = self.index.search(np.array(query_embedding), 5)  # Retrieve top 5 similar chunks
-        relevant_chunks = [self.chunks[i] for i in indices[0]]
-
-        # Here you can implement logic to generate a response based on the relevant chunks
-        response = self.generate_response(relevant_chunks)
-
-        return response, relevant_chunks
-
-    def generate_response(self, relevant_chunks: List[str]) -> str:
-        """Generate a response based on the relevant chunks."""
-        # Combine relevant chunks into a single response
-        response = "Here are the relevant pieces of information:\n"
-        for chunk in relevant_chunks:
-            response += f"- {chunk}\n"
-        return response
+        response = self.generate_response(query)  # Generate response using RAG
+        self.add_to_memory(query, response)  # Store query and response in memory
+        return response, []  # Return response
 
     def calibrate_confidence(self, response: str, confidence: float) -> str:
         if confidence > 0.8:
@@ -733,4 +712,4 @@ if __name__ == "__main__":
     main()
 
 # to run the app, type in the terminal:
-# streamlit run LmStudio/Rag_bot/ragbot_streamlit.py
+# streamlit run LmStudio/Rag_bot/ragbot_streamlit_1.1.py
