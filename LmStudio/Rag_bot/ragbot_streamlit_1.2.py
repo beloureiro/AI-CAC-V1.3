@@ -77,10 +77,10 @@ class EnhancedRAGBot:
         if "provide" in query.lower() and "feedback" in query.lower():
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT Patient_Feedback FROM aicac_consolidated")
+                cursor.execute("SELECT Patient_Feedback, Date FROM aicac_consolidated")
                 rows = cursor.fetchall()
-                feedbacks = [row[0] for row in rows]
-                return feedbacks, [1.0] * len(feedbacks)  # Retorna todos os feedbacks com distância 1.0
+                feedbacks = [f"{row[0]} (Date: {row[1]})" for row in rows]
+                return feedbacks, [1.0] * len(feedbacks)
         else:
             query_embedding = self.model.encode(query, convert_to_tensor=True)
             
@@ -304,12 +304,19 @@ class EnhancedRAGBot:
         if identity_response:
             return identity_response, True, 1.0, []
 
+        # Handle feedback retrieval queries
+        if "provide" in query.lower() and "feedback" in query.lower():
+            feedback_response = self.process_feedback_query(query)
+            return feedback_response, True, 1.0, []
+
         system_prompt = (
             "You are the AI-Skills Advisor, an AI assistant focused on healthcare professional development. "
-            "Your purpose is to provide accurate and tailored responses to improve the user's skills. "
+            "Your purpose is to provide accurate and tailored responses to improve the skills of healthcare professionals. "
+            "The user interacting with you is always a healthcare professional seeking advice to enhance their practice. "
             "When mentioning feedback or recommendations, always identify the specialist who provided it "
             "using the format 'According to [Specialist Name],'. "
-            "Maintain this identity and provide responses without creating names or irrelevant details."
+            "Maintain this identity and provide responses without creating names or irrelevant details. "
+            "Always frame your responses in the context of helping a healthcare professional improve their skills or practice."
         )
         
         user_prompt = self.build_user_prompt(query, context_chunks)
@@ -370,11 +377,12 @@ class EnhancedRAGBot:
             )
         else:
             return (
-                f"The user has asked: '{query}'. Provide a concise response as a chatbot, focusing on their specific query. "
+                f"A healthcare professional has asked: '{query}'. Provide a concise response as an AI Healthcare Professional Coach, "
+                f"focusing on their specific query and how it relates to their professional development or practice improvement. "
                 f"Use the following context information:\n\n"
                 f"{self.get_context_info(context_chunks)}\n\n"
                 f"Maintain a supportive and professional tone, but avoid formal greetings or signatures. "
-                f"Provide direct answers without unnecessary elaboration. "
+                f"Provide direct answers without unnecessary elaboration, always considering that you're advising a healthcare professional. "
                 f"When mentioning feedback or recommendations, identify the specialist who provided it "
                 f"using the format 'According to [Specialist Name],' based on the Specialist Information provided."
             )
@@ -393,8 +401,8 @@ class EnhancedRAGBot:
             specialist_info = {}
 
             for row in rows:
-                feedback = f"{row[3]} (Date: {row[1]})"  # Assuming Patient_Feedback is at index 3 and Date at index 1
-                if row[4].lower() == 'positive':  # Assuming Sentiment_Patient_Experience_Expert is at index 4
+                feedback = f"{row[3]} (Date: {row[1]})"
+                if row[4].lower() == 'positive':
                     positive.append(feedback)
                 elif row[4].lower() == 'negative':
                     negative.append(feedback)
@@ -408,9 +416,9 @@ class EnhancedRAGBot:
                             specialist_info[specialist] = []
                         specialist_info[specialist].append(f"{columns[i]}: {value}")
 
-            context_info += "Positive Feedback:\n" + "\n".join([f"- {f}" for f in positive]) + "\n\n"
-            context_info += "Neutral Feedback:\n" + "\n".join([f"- {f}" for f in neutral]) + "\n\n"
-            context_info += "Negative Feedback:\n" + "\n".join([f"- {f}" for f in negative]) + "\n\n"
+            context_info += "Positive:\n" + "\n".join([f"- {f}" for f in positive]) + "\n\n"
+            context_info += "Neutral:\n" + "\n".join([f"- {f}" for f in neutral]) + "\n\n"
+            context_info += "Negative:\n" + "\n".join([f"- {f}" for f in negative]) + "\n\n"
 
             context_info += "Specialist Information:\n"
             for specialist, info in specialist_info.items():
@@ -455,7 +463,7 @@ class EnhancedRAGBot:
                 "development recommendations. What specific area of your healthcare practice would you like to focus on today?"
             )
         
-        return response, True, 1.0, []
+        return response, True, 0.5, []  # Use a default confidence of 0.5 for fallback responses
 
     def regenerate_response(self, query: str, context_chunks: List[str], conversation_history: List[Dict[str, str]]) -> str:
         try:
@@ -563,39 +571,41 @@ class EnhancedRAGBot:
             return f"I'm not very confident about this, but here's what I can say: {response}"
 
     def process_llm_response(self, response: str, query: str) -> str:
-        # Remove greetings, formal closings, and signatures
-        response = re.sub(r'^(Dear.*?|Best regards.*?|AI-Skills.*?)(\n|$)', '', response, flags=re.MULTILINE | re.IGNORECASE)
+        logging.debug(f"Raw LLM response: {response}")  # Log da resposta bruta do LLM
         
-        # Remove extra blank lines
+        response = re.sub(r'^(Dear.*?|Best regards.*?|AI-Skills.*?)(\n|$)', '', response, flags=re.MULTILINE | re.IGNORECASE)
         response = re.sub(r'\n\s*\n', '\n\n', response)
         
         if "provide" in query.lower() and "feedback" in query.lower():
             feedback_type = "all"
             if "positive" in query.lower():
-                feedback_type = "Positive Feedback"
+                feedback_type = "Positive"
             elif "negative" in query.lower():
-                feedback_type = "Negative Feedback"
+                feedback_type = "Negative"
             elif "neutral" in query.lower():
-                feedback_type = "Neutral Feedback"
+                feedback_type = "Neutral"
             
-            # Extract all feedback items
-            feedback_items = re.findall(r'- (.*?)\(Date: .*?\)', response, re.DOTALL)
+            feedback_items = re.findall(r'[-•]\s*(.*?)\s*\(Date:\s*(\d{2}-\d{2}-\d{4})\)', response, re.DOTALL | re.MULTILINE)
+            
+            logging.debug(f"Extracted feedback items: {feedback_items}")
             
             if feedback_items:
                 if feedback_type != "all":
-                    # Filter feedback based on type
-                    filtered_items = [item for item in feedback_items if feedback_type.lower() in item.lower()]
+                    filtered_items = [item for item in feedback_items if feedback_type.lower() in item[0].lower()]
                     if filtered_items:
-                        return f"{feedback_type} Feedback:\n" + "\n".join([f"- {item}" for item in filtered_items])
+                        return f"{feedback_type} Feedback:\n" + "\n".join([f"- *\"{item[0].strip()}\"* (Date: {item[1]})" for item in filtered_items])
                     else:
-                        return f"I couldn't find any {feedback_type.lower()} feedback in the database."
+                        return f"No {feedback_type.lower()} patient feedback found in the database."
                 else:
-                    return "All Feedback:\n" + "\n".join([f"- {item}" for item in feedback_items])
+                    return "All Feedback:\n" + "\n".join([f"- *\"{item[0].strip()}\"* (Date: {item[1]})" for item in feedback_items])
             else:
-                return f"I couldn't find any {feedback_type.lower()} feedback in the database."
+                return response.strip()
         else:
-            # For other queries, just clean up the formatting
             return response.strip()
+
+    def extract_date(self, item: str) -> str:
+        date_match = re.search(r'\(Date:\s*(\d{2}-\d{2}-\d{4})\)', item)
+        return date_match.group(1) if date_match else "Unknown Date"
 
 
 def plot_similarity_scores(chunks, distances):
@@ -684,23 +694,16 @@ def main():
     st.markdown(
         """
         <style>
-        /* Custom sidebar background color */
         [data-testid="stSidebar"] {
             background-color: #0e1525;
         }
-        
-        /* Custom chat input box color */
         .stTextInput > div > div > input {
             background-color: #0e1525;
             color: white;
         }
-        
-        /* Custom chat input box placeholder color */
         .stTextInput > div > div > input::placeholder {
             color: rgba(255, 255, 255, 0.5);
         }
-        
-        /* Custom chat input box border color */
         .stTextInput > div > div {
             border-color: #1e2a3a;
         }
@@ -713,14 +716,11 @@ def main():
 
     if "messages" not in st.session_state:
         st.session_state.messages = []
-
     if "cache_hits" not in st.session_state:
         st.session_state.cache_hits = 0
-
     if "total_queries" not in st.session_state:
         st.session_state.total_queries = 0
 
-    # Define o caminho para os avatares
     user_avatar_path = "LmStudio/Rag_bot/assets/profile-picture.png"
     assistant_avatar_path = "LmStudio/Rag_bot/assets/neural.png"
 
@@ -744,8 +744,11 @@ def main():
                     logging.debug(f"Relevant chunks: {relevant_chunks}")
                     logging.debug(f"Distances: {distances}")
                     
+                    verification_status = "✅ Verified" if verified else "⚠️ Unverified"
+                    st.markdown(f"{verification_status} Response (Confidence: {confidence * 100:.2f}%)")
+                    
                     if "provide" in prompt.lower() and "feedback" in prompt.lower():
-                        feedback_count = response.count("\n-")
+                        feedback_count = len(relevant_chunks)
                         feedback_type = "all"
                         if "positive" in prompt.lower():
                             feedback_type = "positive"
@@ -754,11 +757,13 @@ def main():
                         elif "neutral" in prompt.lower():
                             feedback_type = "neutral"
                         
-                        st.markdown(f"Found {feedback_count} {feedback_type} patient feedback(s):")
-                        st.markdown(response)
+                        if feedback_count > 0:
+                            st.markdown(f"Found {feedback_count} {feedback_type} patient feedback(s):")
+                            for feedback in relevant_chunks:
+                                st.markdown(f"- {feedback}")
+                        else:
+                            st.markdown(f"No {feedback_type} patient feedback found in the database.")
                     else:
-                        verification_status = "✅ Verified" if verified else "⚠️ Unverified"
-                        st.markdown(f"{verification_status} Response (Confidence: {confidence * 100:.2f}%)")
                         st.markdown(response)
                     
                     if source_docs:
@@ -770,36 +775,25 @@ def main():
                     logging.error(f"Error processing query: {e}")
                     response, verified, confidence, source_docs = ragbot.fallback_response(prompt, [])
                     distances = []
-                    st.error("I apologize, but I encountered an error while processing your query. I'll provide a fallback response.")
+                    verification_status = "⚠️ Fallback Response"
+                    st.markdown(f"{verification_status} (Confidence: {confidence * 100:.2f}%)")
                     st.markdown(response)
 
-        st.session_state.messages.append(
-            {"role": "assistant", "content": response})
+        st.session_state.messages.append({"role": "assistant", "content": response})
 
         with st.sidebar:
-            # Mantenha o cabeçalho existente
-            st.markdown(
-                """
-                <h3 style='text-align: center; font-size: 16px;'>RAGBot Analytics</h3>
-                """,
-                unsafe_allow_html=True
-            )
+            st.markdown("<h3 style='text-align: center; font-size: 16px;'>RAGBot Analytics</h3>", unsafe_allow_html=True)
 
-            # Adicione o novo gráfico de confiança
             if 'distances' in locals() and distances:
                 fig_confidence = plot_confidence_gauge(confidence)
                 st.plotly_chart(fig_confidence, use_container_width=True, config={'displayModeBar': False})
                 
-                # Add the legend as a separate Streamlit element
                 legend_text = get_confidence_legend(confidence)
                 st.markdown(f"<span style='color: #35855d; font-size: 14px;'>{legend_text}</span>", unsafe_allow_html=True)
-                
-                #st.markdown(f"<span style='color: #35855d; font-size: 10px;'>Confidence: {confidence:.2f}</span>", unsafe_allow_html=True)
 
-            # Mantenha o gráfico de similaridade existente
             with st.container():
                 if 'distances' in locals() and distances:
-                    similarities = 1 / (1 + np.array(distances))  # Calcula as similaridades a partir das distâncias
+                    similarities = 1 / (1 + np.array(distances))
                     fig_similarity = plot_similarity_scores(relevant_chunks, similarities)
                     st.plotly_chart(fig_similarity, use_container_width=True)
                     st.markdown(
@@ -810,33 +804,17 @@ def main():
                 else:
                     st.warning("No similarity scores available for this query.")
 
-            # Mantenha as estatísticas de cache existentes
             with st.expander("Cache Statistics", expanded=True):
                 cache_hit_rate = (st.session_state.cache_hits / st.session_state.total_queries) * 100 if st.session_state.total_queries > 0 else 0
                 st.write(f"Cache Hit Rate: {cache_hit_rate:.2f}%")
-                st.markdown(
-                    "<small>Percentage of queries answered using cached results. "
-                    "A higher rate means faster responses for repeated questions.</small>",
-                    unsafe_allow_html=True
-                )
+                st.markdown("<small>Percentage of queries answered using cached results. A higher rate means faster responses for repeated questions.</small>", unsafe_allow_html=True)
                 st.write(f"Total Queries: {st.session_state.total_queries}")
-                st.markdown(
-                    "<small>Total number of questions you've asked.</small>", unsafe_allow_html=True)
+                st.markdown("<small>Total number of questions you've asked.</small>", unsafe_allow_html=True)
                 st.write(f"Cache Hits: {st.session_state.cache_hits}")
-                st.markdown(
-                    "<small>Number of times a query was answered using cached results, "
-                    "resulting in faster response times.</small>",
-                    unsafe_allow_html=True
-                )
-                st.write(f"Cache Misses: {
-                         st.session_state.total_queries - st.session_state.cache_hits}")
-                st.markdown(
-                    "<small>Number of times a query required new processing. "
-                    "These queries may take longer to answer.</small>",
-                    unsafe_allow_html=True
-                )
+                st.markdown("<small>Number of times a query was answered using cached results, resulting in faster response times.</small>", unsafe_allow_html=True)
+                st.write(f"Cache Misses: {st.session_state.total_queries - st.session_state.cache_hits}")
+                st.markdown("<small>Number of times a query required new processing. These queries may take longer to answer.</small>", unsafe_allow_html=True)
 
-            # Mantenha a exibição do contexto relevante
             with st.expander("View Relevant Context", expanded=False):
                 st.markdown(
                     "This section shows the most relevant text chunks used to answer your query. "
@@ -845,13 +823,11 @@ def main():
                 if 'distances' in locals() and distances:
                     for i, (chunk, distance) in enumerate(zip(relevant_chunks, distances), 1):
                         similarity_score = 1 / (1 + distance)
-                        st.markdown(
-                            f"**Chunk {i}:** (Similarity Score: {similarity_score:.2f})")
+                        st.markdown(f"**Chunk {i}:** (Similarity Score: {similarity_score:.2f})")
                         st.write(chunk)
                         st.markdown("---")
                 else:
                     st.warning("No relevant context available for this query.")
-
 
 def update_cache_statistics():
     if "cache_hits" not in st.session_state:
