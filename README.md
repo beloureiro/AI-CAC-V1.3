@@ -1,79 +1,85 @@
 ---
 ### What's New in Version 1.3
-#### Introducing RAGBot: A Healthcare Coaching Assistant
+#### Introducing EnhancedRAGBot: A Data-Driven Healthcare Chatbot
 
-Version 1.3 introduces **RAGBot**, a **Retrieval-Augmented Generation (RAG)** chatbot designed to support healthcare professionals. This feature integrates **SentenceTransformer (all-MiniLM-L6-v2)** for generating text embeddings with a **FAISS** index for efficient retrieval of contextually relevant expert feedback. RAGBot functions as a personalized coaching assistant, offering real-time guidance based on consolidated data.
+Version 1.3 introduces **EnhancedRAGBot**, an advanced **Retrieval-Augmented Generation (RAG)** chatbot specifically designed to assist healthcare professionals. This new version leverages **SentenceTransformer (all-MiniLM-L6-v2)** for creating text embeddings and integrates with a **FAISS** index, which allows for efficient retrieval of contextually relevant expert feedback stored in a local database.
+
+EnhancedRAGBot provides personalized coaching and real-time guidance by processing both structured and unstructured healthcare data, making it a powerful tool for healthcare providers seeking data-driven support.
 
 #### Key Technical Features:
-- **New Real-Time Chat Functionality**: RAGBot provides direct, real-time interaction, allowing users to pose questions and receive contextually relevant feedback that is driven by expert insights. The chatbot tailors responses based on the context and emotional cues detected within the queries.
-- **Chunked Data Processing and FAISS Indexing**: Text data is consolidated from markdown files, split into fixed-size chunks, and indexed using FAISS, enabling quick retrieval of relevant text segments. This method enhances response accuracy by focusing on the most contextually similar chunks.
-- **Modular Architecture with Multi-level Caching**: The architecture separates data processing, embedding generation, and FAISS indexing, making the system highly maintainable. Additionally, caching mechanisms (using `@st.cache_data` and `@st.cache_resource`) are employed across various components—data loading, embedding generation, and model loading—accelerating responses, particularly for repeated queries.
-- **API-based LLM Integration with Configurable Parameters**: Through a custom API, RAGBot interacts with a large language model (LLM), allowing fine-tuning of response characteristics, including temperature and token limits. This provides precision in responses, tailoring advice according to user queries and emotional cues.
-- **Comprehensive Performance Dashboard**: The sidebar contains a real-time dashboard displaying analytics on RAGBot’s performance. Key metrics include cache hit rates, total query counts, and similarity scores for retrieved chunks. This offers users detailed insights into system efficiency and response accuracy.
+- **Real-Time Query Processing with Database-Driven Responses**: EnhancedRAGBot connects to a local SQLite database to retrieve patient feedback and relevant information. It offers real-time responses based on patient experiences and professional insights stored in the database.
+- **Contextual Data Chunking and FAISS Indexing**: The chatbot uses FAISS to index text chunks from the database, enabling fast retrieval of contextually relevant feedback, which improves response precision.
+- **Multi-Model and Multi-Step Similarity Assessment**: EnhancedRAGBot employs multiple similarity measures, such as TF-IDF, BM25, and cosine similarity with embeddings, ensuring that responses are highly relevant and contextually accurate.
+- **Modular Caching and Efficient Data Retrieval**: By separating the stages of data retrieval, embedding generation, and model querying, EnhancedRAGBot achieves high maintainability. Caching mechanisms (`@st.cache_data` and `@st.cache_resource`) optimize performance, especially for repeated queries.
+- **LLM API Integration with Configurable Parameters**: The bot connects to a large language model (LLM) via an API, providing fine-tuned responses based on user input. This setup allows the chatbot to tailor its responses, considering emotional cues and query context.
+- **Performance Monitoring with Interactive Dashboard**: The system includes a dashboard with real-time analytics. Key metrics, like similarity scores and response confidence, are displayed in a user-friendly interface, helping users understand the relevance and reliability of responses.
 
-#### Benefits of RAGBot:
-- **Contextualized Expert-Driven Assistance**: By using contextually relevant text chunks, RAGBot provides detailed, actionable insights tailored to specific domains like patient experience, process improvement, and communication, thereby enhancing professional development.
-- **Optimized Performance Through Caching and Indexing**: Chunked text data indexed with FAISS, combined with multi-level caching, ensures rapid retrieval of information and reduced latency in responses, improving the user experience and facilitating quick access to expert knowledge.
-- **Personalized Interaction with Emotional Awareness**: The chatbot detects emotional cues in user input, adjusting responses to better support and engage the user, offering an interaction experience that feels personalized and empathetic.
-- **Enhanced Maintainability and Scalability**: The modular design and separation of processes allow easy updates and expansions. The API-driven architecture is also configurable, enabling adaptation to a wide range of healthcare settings.
-- **Insightful Real-Time Performance Monitoring**: The sidebar dashboard provides metrics like cache hit rates, total query counts, and similarity scores, allowing users to monitor system efficiency and understand the relevance of responses. Users can view individual chunks retrieved with similarity scores, offering transparency and the ability to gauge the system's contextual accuracy.
+#### How EnhancedRAGBot Works:
+EnhancedRAGBot processes user queries by retrieving and analyzing data from a local SQLite database. It uses:
+1. **Data Chunking**: Feedback is divided into manageable chunks, indexed with FAISS, and further processed using similarity metrics.
+2. **Multi-Tiered Retrieval**: The bot integrates BM25 and TF-IDF algorithms for initial filtering, followed by cosine similarity for deeper contextual matching.
+3. **Contextual Understanding and Real-Time LLM Interaction**: After retrieving relevant data chunks, EnhancedRAGBot constructs a user prompt and sends it to an LLM for final response generation, incorporating contextual understanding from its training.
 
-This version significantly extends RAGBot’s functionality with new real-time, context-aware interactions, and adds a comprehensive dashboard that empowers healthcare professionals by delivering tailored support and operational transparency.
-
+#### Benefits of EnhancedRAGBot:
+- **Data-Driven Insights**: Retrieves and analyzes structured feedback directly from the database, providing precise, actionable insights that support healthcare professional development.
+- **Responsive and Contextually Accurate**: Multi-tiered similarity analysis ensures that each response is backed by relevant data, creating an experience that feels both personalized and well-informed.
+- **Emotional Sensitivity in Responses**: The bot detects and adapts to emotional cues within queries, delivering a user experience that feels supportive and empathetic.
+- **Scalable and Modular Architecture**: Modular design and caching enable easy updates and improved scalability, with a configuration adaptable to different healthcare settings.
+- **Transparent Performance Metrics**: The interactive dashboard offers insight into the bot's response accuracy, allowing users to view similarity scores and assess the bot's performance in real-time.
 
 ---
+
 # AI Clinical Advisory Crew (v1.3)
 
-## Description
-Welcome to the **AI Clinical Advisory Crew**, an advanced and flexible system designed to transform and elevate the patient experience in healthcare. This project brings together a team of specialized AI agents, each with a unique role in analyzing patient feedback, improving healthcare workflows, assessing emotional states, and delivering actionable recommendations for communication and operational improvements.
+## Overview
+The **AI Clinical Advisory Crew** is a sophisticated system aimed at transforming the healthcare experience by providing specialized AI-driven support. This setup involves a team of AI agents, each dedicated to a specific aspect of healthcare, such as patient feedback analysis, workflow optimization, emotional state assessment, and communication enhancement.
 
-For a live demonstration of how this system works in practice, visit the frontend Viewer platform that visualizes AI agent outputs: [AI-CAC Viewer](https://ai-cac.streamlit.app/). You can also explore the front-end repository [here](https://github.com/beloureiro/AI-CAC-Viewer.git).
+To explore how this system works, visit the live demo at [AI-CAC Viewer](https://ai-cac.streamlit.app/), or access the front-end repository [here](https://github.com/beloureiro/AI-CAC-Viewer.git).
 
-The project offers **two main configurations** for running the AI agents:
+This system provides **two main configurations** for AI agent operation:
 
-1. **AI Agent Crew with Ollama Framework**: This option leverages **multiple LLMs** dynamically using the **CrewAI** framework. It selects the most suitable models from a variety of sources (e.g., Meta's LLaMA, NousResearch's Hermes, Microsoft's Phi) to ensure optimal performance for each task. This multi-agent approach allows the system to adapt to the specific needs of different healthcare scenarios by combining the strengths of various models.
+1. **AI Agent Crew with the Ollama Framework**: This setup dynamically utilizes multiple large language models (LLMs) through the **CrewAI** framework, optimizing model selection (e.g., LLaMA, Hermes, Phi) for each task. This multi-agent approach enhances adaptability across diverse healthcare scenarios.
    
-2. **Python-Only Local LLM Setup**: The second option allows you to run a fully local version of the AI agents using **LM Studio**. This configuration uses local models (such as **Meta-Llama-3.1-8B-Instruct-GGUF**) and processes everything locally in Python. This ensures maximum data security by keeping all operations internal, while also offering granular control over model execution parameters and significant cost savings due to the absence of external API usage.
+2. **Python-Only Local LLM Setup**: With **LM Studio**, users can run all operations locally, using models like **Meta-Llama-3.1-8B-Instruct-GGUF**. This setup ensures data privacy, allows for extensive control over model execution, and reduces costs by avoiding external APIs.
 
-### Major benefits of this system:
-1. **Local LLMs** for **maximum data security**, ensuring that all sensitive healthcare data is processed internally.
-2. **Significant cost savings**, as external API calls are not required.
-3. **Flexibility to choose the optimal configuration**: The system can switch between using multiple LLMs in combination with **Ollama** and the CrewAI framework or running entirely locally with **Python and LM Studio**.
-4. **Granular control with LM Studio**: LM Studio provides precise control over model parameters like temperature, top_p, and repetition penalty, while also supporting GPU optimization for efficient local execution.
-5. **Refactored codebase**: Version 1.3 introduces a modular, clean codebase that simplifies further enhancements and maintenance, regardless of the configuration used.
+### Key System Benefits:
+1. **Local LLM Support for Data Security**: Sensitive healthcare data remains internal.
+2. **Cost-Effective**: No reliance on external APIs reduces operational expenses.
+3. **Flexible Configurations**: Choose between multi-LLM setups with CrewAI or fully local execution with Python and LM Studio.
+4. **Enhanced Control with LM Studio**: Adjust parameters like temperature and top_p while benefiting from GPU optimization for local execution.
+5. **Streamlined Codebase in Version 1.3**: A clean, modular structure makes future updates and maintenance straightforward.
 
-### Benefits of LM Studio Integration
+### LM Studio Integration Advantages
+For local setups, **LM Studio** offers:
 
-The **LM Studio** integration is especially valuable for those opting for the fully local execution path:
+- **Concurrent Model Execution**: Run multiple models in parallel for direct comparison.
+- **Fine-Grained Parameter Control**: Adjust settings like temperature and repetition penalty for precise outputs.
+- **GPU Optimization**: Supports GPU use and model quantization for efficiency.
+- **OpenAI-Compatible API**: Real-time results streaming.
+- **Detailed Monitoring**: Track CPU/GPU metrics for effective resource management.
 
-- **Parallel Model Execution**: Run multiple models simultaneously for direct comparison.
-- **Fine-tuned Control**: Parameters like temperature, top_p, and repetition penalty can be adjusted to produce more precise outputs.
-- **GPU Optimization**: LM Studio efficiently uses NVIDIA/AMD GPUs and supports model quantization to reduce memory use and increase speed.
-- **OpenAI-Compatible API**: Allows for seamless integration and real-time streaming of results.
-- **Detailed Performance Monitoring**: Track CPU and GPU metrics in real time, allowing for efficient resource management during local execution.
+These features make LM Studio ideal for local tasks, enabling performance comparisons across models to choose the best configuration.
 
-These features make LM Studio highly adaptable for advanced local LLM tasks, ensuring that performance can be compared across models to select the most effective configuration for each use case.
+## AI Agents
+Our team includes five specialized agents:
+1. **Patient Experience Expert**: Analyzes patient feedback for key issues and emotional intensity, helping improve care quality.
+2. **Health & IT Process Expert**: Maps patient journeys and identifies workflow inefficiencies, offering process improvement recommendations.
+3. **Clinical Psychologist**: Assesses patient emotions, devising supportive strategies to enhance well-being.
+4. **Communication Expert**: Evaluates provider-patient interactions, pinpointing areas for clearer and more empathetic communication.
+5. **Manager and Advisor**: Synthesizes feedback, providing comprehensive reports and strategic recommendations.
 
-## Agents
-Our AI team consists of five dedicated agents:
-1. **Patient Experience Expert**: Focuses on understanding patient feedback, identifying key concerns, and measuring emotional intensity to help healthcare providers address critical issues.
-2. **Health & IT Process Expert**: Specializes in mapping the patient journey, identifying inefficiencies in workflows, and recommending improvements from both healthcare and IT perspectives.
-3. **Clinical Psychologist**: Analyzes the emotional state of patients, developing support strategies that address psychological needs and promote overall well-being.
-4. **Communication Expert**: Evaluates the quality of interactions between healthcare professionals and patients, identifying where communication can be improved for better clarity, empathy, and problem resolution.
-5. **Manager and Advisor**: Consolidates feedback from all experts, eliminating redundancies and providing clear, actionable reports that offer strategic recommendations for process improvement.
-
-These agents are powered by either a dynamic combination of LLMs, which are tested and swapped across different scenarios using CrewAI, or a fully local execution setup using LM Studio, depending on the chosen configuration.
+Agents can be powered by a dynamic multi-LLM setup with CrewAI or a local configuration using LM Studio.
 
 ## Requirements
 - Python 3.8+
-- Dependencies listed in `requirements.txt`
+- Install dependencies from `requirements.txt`
 
 ## Installation
 1. Clone the repository
-2. Install the dependencies:
-
-   ```
+2. Install dependencies:
+   ```bash
    pip install -r requirements.txt
+
    ```
 
 ## Usage
