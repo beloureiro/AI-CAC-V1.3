@@ -1,5 +1,6 @@
-# app.py
-
+# ---------------------------------------------------------------------
+# Code to run the RAG bot with Streamlit final version and modularized
+# --------------------------------------------------------------------- 
 import streamlit as st
 from ragbot import EnhancedRAGBot
 from plot_utils import plot_similarity_scores, plot_confidence_gauge, get_confidence_legend
@@ -8,11 +9,13 @@ import numpy as np
 
 @st.cache_resource
 def get_ragbot():
+    """Initializes and returns an instance of EnhancedRAGBot with database setup and model loading."""
     bot = EnhancedRAGBot()
     bot.initialize()
     return bot
 
 def main():
+    """Sets up the Streamlit interface for the Enhanced RAGBot Healthcare Coach app, handling user input, displaying chat messages, and visualizing analytics."""
     st.set_page_config(page_title="Enhanced RAGBot Healthcare Coach",
                        layout="wide", initial_sidebar_state="expanded")
     st.title("AI Skills Advisor with Enhanced Verification")
@@ -133,6 +136,7 @@ def main():
                     st.warning("No relevant context available for this query.")
 
 def update_cache_statistics():
+    """Updates cache hit statistics, calculates the cache hit rate, and returns it."""
     if "cache_hits" not in st.session_state:
         st.session_state.cache_hits = 0
     if "total_queries" not in st.session_state:

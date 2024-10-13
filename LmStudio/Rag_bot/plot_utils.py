@@ -1,9 +1,11 @@
-# plot_utils.py
-
+# ---------------------------------------------------------------------
+# Code to plot the similarity scores and confidence gauge
+# ---------------------------------------------------------------------
 import numpy as np
 import plotly.graph_objects as go
 
 def plot_similarity_scores(chunks, distances):
+    """Generates a bar plot of similarity scores for given text chunks based on their distances, returning a Plotly figure."""
     similarity_scores = 1 / (1 + np.array(distances))
     max_score = max(similarity_scores)
 
@@ -28,6 +30,7 @@ def plot_similarity_scores(chunks, distances):
     return fig
 
 def plot_confidence_gauge(confidence: float):
+    """Creates a gauge chart to visualize response confidence as a percentage, returning a Plotly figure."""
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=confidence * 100,
@@ -64,6 +67,7 @@ def plot_confidence_gauge(confidence: float):
     return fig
 
 def get_confidence_legend(confidence: float) -> str:
+    """Returns a textual description of confidence level based on the given confidence score."""
     if confidence >= 0.7:
         return "High confidence: The response is likely accurate and well-supported by the data."
     elif confidence >= 0.5:

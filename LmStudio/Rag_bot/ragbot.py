@@ -1,5 +1,6 @@
-# ragbot.py
-
+# ---------------------------------------------------------------------
+# Code to implement the RAG bot
+# ---------------------------------------------------------------------
 import requests
 import numpy as np
 import datetime
@@ -22,6 +23,8 @@ logging.basicConfig(level=logging.DEBUG,
 
 
 class EnhancedRAGBot:
+    """A class to implement a Retrieval-Augmented Generation (RAG) bot for healthcare queries, retrieving data and interacting with an LLM to provide responses."""
+
     CHAT_API_URL = "http://127.0.0.1:1234/v1/chat/completions"  # URL for chat
     MAX_RETRIES = 3
     RETRY_DELAY = 2
@@ -59,6 +62,7 @@ class EnhancedRAGBot:
     }
 
     def __init__(self, db_path='LmStudio/Rag_bot/feedback_analysis.db'):
+        """Initializes the EnhancedRAGBot with a database path, embedding model, and database connection."""
         self.db_path = db_path
         self.model = SentenceTransformer('all-MiniLM-L6-v2')
         self.initialize_db()
@@ -74,6 +78,7 @@ class EnhancedRAGBot:
         self.collection = self.client.get_or_create_collection("chat_history")
 
     def initialize_db(self):
+        """Initializes the SQLite database connection and checks for the required table, logging the result."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -85,6 +90,7 @@ class EnhancedRAGBot:
                     "Successfully connected to the database and found 'aicac_consolidated' table.")
 
     def retrieve_similar_chunks(self, query: str, top_k: int = 3) -> Tuple[List[str], List[str], List[float], List[float]]:
+        """Retrieves the top similar chunks from the database based on a query, returning lists of chunk texts, sources, distances, and similarity scores."""
         try:
             if "provide" in query.lower() and "feedback" in query.lower():
                 with sqlite3.connect(self.db_path) as conn:
@@ -164,6 +170,7 @@ class EnhancedRAGBot:
             return [], [], [], []
 
     def identify_source(self, source_identifier: str) -> str:
+        """Identifies the source category for a given identifier using a mapping dictionary."""
         source_mapping = {
             'Patient_Feedback': 'patient_feedback',
             'Sentiment_Patient_Experience_Expert': 'patient_experience_expert',
@@ -187,6 +194,7 @@ class EnhancedRAGBot:
         return source_mapping.get(source_identifier, 'unknown_source')
 
     def process_query(self, query: str) -> Tuple[str, List[str]]:
+        """Processes a query, retrieves relevant chunks, calls the LLM, and stores the response."""
         try:
             relevant_chunks, sources, distances, similarities = self.retrieve_similar_chunks(query)
             response, _, _, _ = self.call_llm(query, relevant_chunks, sources, self.conversation_history)
@@ -200,6 +208,7 @@ class EnhancedRAGBot:
             return self.fallback_response(query, [])
 
     def get_time_appropriate_greeting(self):
+        """Returns a greeting message based on the current time of day ('Good morning', 'Good afternoon', or 'Good evening')."""
         current_hour = datetime.datetime.now().hour
         if 5 <= current_hour < 12:
             return "Good morning"
@@ -209,6 +218,7 @@ class EnhancedRAGBot:
             return "Good evening"
 
     def calculate_similarity(self, text1: str, text2: str) -> float:
+        """Calculates cosine similarity between two text strings using TF-IDF, returning a similarity score."""
         if not text1 or not text2:
             return 0.0
         try:
@@ -219,6 +229,7 @@ class EnhancedRAGBot:
             return 0.0
 
     def verify_response(self, response: str, context: List[str]) -> Tuple[bool, float, List[str]]:
+        """Verifies response relevance based on similarity to context, returning verification status, confidence score, and source documents."""
         if any(greeting in response.lower() for greeting in ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening']):
             return True, 1.0, []
 
@@ -237,6 +248,7 @@ class EnhancedRAGBot:
         return verified, confidence, source_docs
 
     def handle_greeting(self, query):
+        """Checks if a query is a greeting and returns a time-appropriate response or None if not a greeting."""
         greetings = ['hi', 'hello', 'hey', 'ola', 'olá', 'greetings']
         if query.lower().strip() in greetings:
             time_based_greeting = self.get_time_appropriate_greeting()
@@ -244,6 +256,7 @@ class EnhancedRAGBot:
         return None
 
     def handle_identity_question(self, query):
+        """Checks if a query is an identity question and responds with bot information, or None if not an identity question."""
         identity_questions = ['who are you', 'what are you', 'tell me about yourself', 'what can you do']
         if any(question in query.lower() for question in identity_questions):
             return (
@@ -262,20 +275,24 @@ class EnhancedRAGBot:
         return None
 
     def add_to_memory(self, query: str, response: str):
+        """Adds a query-response pair to the bot's memory storage."""
         query_embedding = self.model.encode([query], convert_to_tensor=False)
         self.collection.add_documents(embeddings=query_embedding, metadatas={
             "query": query, "response": response})
 
     def retrieve_from_memory(self, query: str, k: int = 3) -> List[Tuple[str, str]]:
+        """Retrieves similar past query-response pairs from memory based on a query, returning a list of tuples with past queries and responses."""
         query_embedding = self.model.encode([query], convert_to_tensor=False)
         results = self.collection.query(query_embedding, k=k)
         return [(doc['metadata']['query'], doc['metadata']['response']) for doc in results['documents']]
 
     def calculate_bert_score(self, response: str, context: str) -> float:
+        """Calculates the BERTScore for the response relative to a context string, returning the similarity score."""
         P, R, F1 = score([response], [context], model_type='roberta-large')
         return F1.item()
 
     def calibrate_response(self, response: str, context: str) -> str:
+        """Adjusts the response based on BERTScore confidence level, returning a calibrated response."""
         confidence = self.calculate_bert_score(response, context)
         if confidence > 0.8:
             return response
@@ -285,6 +302,7 @@ class EnhancedRAGBot:
             return f"I'm not entirely certain, but it seems that {response}"
 
     def call_llm(self, query: str, context_chunks: List[str], sources: List[str], conversation_history: List[Dict[str, str]]) -> Tuple[str, bool, float, List[str]]:
+        """Calls the LLM with a query and context, generating a response and returning the response, completion status, confidence score, and an empty list."""
         # Check for greeting first
         greeting_response = self.handle_greeting(query)
         if greeting_response:
@@ -362,6 +380,7 @@ class EnhancedRAGBot:
             return self.fallback_response(query, context_chunks)
 
     def build_user_prompt(self, query: str, context_chunks: List[str]) -> str:
+        """Builds a user prompt for the LLM based on the query and context chunks, returning the generated prompt."""
         if "provide" in query.lower() and "feedback" in query.lower():
             feedback_type = "all"
             if "positive" in query.lower():
@@ -392,6 +411,7 @@ class EnhancedRAGBot:
             )
 
     def get_context_info(self, context_chunks: List[str]) -> str:
+        """Compiles context information from chunks for the LLM prompt, returning a context information string."""
         context_info = ""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -431,14 +451,17 @@ class EnhancedRAGBot:
         return context_info
 
     def is_greeting(self, query: str) -> bool:
+        """Determines if a query is a greeting, returning True if it is, otherwise False."""
         greetings = ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening']
         return query.lower().strip() in greetings
 
     def is_identity_question(self, query: str) -> bool:
+        """Determines if a query is an identity question, returning True if it is, otherwise False."""
         identity_questions = ['who are you', 'what are you', 'tell me about yourself']
         return any(question in query.lower() for question in identity_questions)
 
     def fallback_response(self, query: str, context_chunks: List[str]) -> Tuple[str, bool, float, List[str]]:
+        """Provides a fallback response if primary processing fails, returning response, status, confidence, and an empty list."""
         logging.info("Using fallback response mechanism")
 
         if self.is_greeting(query):
@@ -470,6 +493,7 @@ class EnhancedRAGBot:
         return response, True, 0.5, []
 
     def load_data(self):
+        """Loads patient feedback data from the database for initial processing, returning combined feedback text."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT Patient_Feedback FROM aicac_consolidated")
@@ -477,6 +501,7 @@ class EnhancedRAGBot:
             return " ".join([row[0] for row in rows if row[0]])
 
     def initialize(self):
+        """Initializes the bot by loading data, creating text chunks, and setting up embeddings."""
         if not self.initialization_done:
             text = self.load_data()
             self.chunks = self.split_text_into_chunks(text)
@@ -490,6 +515,7 @@ class EnhancedRAGBot:
             self.initialization_done = True
 
     def split_text_into_chunks(self, text, chunk_size=500):
+        """Splits a large text into smaller chunks of specified size, returning a list of text chunks."""
         sentences = re.split(r'(?<=[.!?]) +', text)
         chunks = []
         current_chunk = ""
@@ -504,15 +530,18 @@ class EnhancedRAGBot:
         return chunks
 
     def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
+        """Generates embeddings for a list of text chunks, returning a list of embeddings."""
         return self.model.encode(texts, convert_to_tensor=False).tolist()
 
     def build_faiss_index(self, embeddings):
+        """Builds a FAISS index from the provided embeddings, returning the FAISS index object."""
         dimension = len(embeddings[0])
         index = faiss.IndexFlatL2(dimension)
         index.add(np.array(embeddings).astype('float32'))
         return index
 
     def process_llm_response(self, response: str, query: str) -> str:
+        """Processes the raw LLM response, removing unnecessary content and returning a cleaned-up response."""
         logging.debug(f"Raw LLM response: {response}")
 
         response = re.sub(r'^(Dear.*?|Best regards.*?|AI-Skills.*?)(\n|$)',

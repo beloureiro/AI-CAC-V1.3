@@ -1,3 +1,6 @@
+# ----------------------------------------------
+# Code to run the RAG bot with Streamlit v1.1
+# ----------------------------------------------
 import os
 import requests
 import numpy as np
@@ -13,12 +16,12 @@ import re
 import logging
 import json
 from rank_bm25 import BM25Okapi
-from sentence_transformers import SentenceTransformer, CrossEncoder
-from chromadb import Client
-from bert_score import score
+from sentence_transformers import SentenceTransformer
 
 # Configuração de logging mais detalhada
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
+
 
 class EnhancedRAGBot:
     EMBEDDING_API_URL = "http://127.0.0.1:1234/v1/embeddings"  # URL para gerar embeddings
@@ -44,10 +47,6 @@ class EnhancedRAGBot:
         self.bm25 = None  # Adiciona BM25 para recuperação
         self.st_model = None  # Adiciona modelo de SentenceTransformer
         self.conversation_memory = []  # Memória de conversa
-        self.model = SentenceTransformer('all-MiniLM-L6-v2')  # Load sentence transformer model
-        self.cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-12-v2')  # Load Cross-Encoder for ranking
-        self.client = Client()  # Ajuste a inicialização do client
-        self.collection = self.client.get_or_create_collection("chat_history")  # Create collection for chat history
 
     def consolidate_md_files(self):
         all_text = ""
@@ -72,7 +71,8 @@ class EnhancedRAGBot:
                 with open(_self.consolidated_path, 'r', encoding='utf-8') as file:
                     all_text = file.read()
             else:
-                raise FileNotFoundError(f"File {_self.consolidated_path} not found or is empty.")
+                raise FileNotFoundError(
+                    f"File {_self.consolidated_path} not found or is empty.")
         except FileNotFoundError as e:
             all_text = "This is a fallback text for demonstration purposes. The actual consolidated text file could not be loaded."
         except Exception as e:
@@ -81,7 +81,8 @@ class EnhancedRAGBot:
         if not all_text:
             all_text = "Fallback text for empty file scenario."
 
-        _self.source_documents = _self._load_source_documents()  # Carrega documentos de origem
+        # Carrega documentos de origem
+        _self.source_documents = _self._load_source_documents()
 
         return all_text
 
@@ -91,13 +92,15 @@ class EnhancedRAGBot:
             if filename.endswith(".md"):
                 file_path = os.path.join(_self.data_directory, filename)
                 with open(file_path, 'r', encoding='utf-8') as file:
-                    documents[filename] = file.read()  # Carrega o conteúdo dos documentos
+                    # Carrega o conteúdo dos documentos
+                    documents[filename] = file.read()
         return documents
 
     @st.cache_data
     def split_text_into_chunks(_self, text):
         # Implementa uma estratégia de divisão de texto melhorada
-        sentences = re.split(r'(?<=[.!?]) +', text)  # Divide o texto em sentenças
+        # Divide o texto em sentenças
+        sentences = re.split(r'(?<=[.!?]) +', text)
         chunks = []
         current_chunk = ""
         for sentence in sentences:
@@ -111,7 +114,21 @@ class EnhancedRAGBot:
         return chunks
 
     def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
-        return self.model.encode(texts, convert_to_tensor=False)  # Use sentence transformer for embeddings
+        headers = {"Content-Type": "application/json"}
+        data = {
+            "model": "nomic-embed-text-v1.5",
+            "input": texts
+        }
+
+        try:
+            response = requests.post(
+                self.EMBEDDING_API_URL, headers=headers, json=data)
+            response.raise_for_status()
+            result = response.json()
+            return [item["embedding"] for item in result["data"]]
+        except Exception as e:
+            logging.error(f"Error generating embeddings: {e}")
+            return []
 
     @st.cache_resource
     def build_faiss_index(_self, embeddings):
@@ -121,9 +138,22 @@ class EnhancedRAGBot:
         return index
 
     def retrieve_similar_chunks(self, query: str, top_k: int = 3) -> Tuple[List[str], List[float]]:
-        query_embedding = self.model.encode([query], convert_to_tensor=False)  # Get query embedding
-        D, I = self.index.search(np.array(query_embedding), top_k)  # Use Faiss for similarity search
-        return [self.chunks[i] for i in I[0]], D[0].tolist()  # Return chunks and distances
+        bm25_scores = self.bm25.get_scores(query)
+        bm25_top_k = np.argsort(bm25_scores)[-top_k:][::-1]
+        query_embedding = self.st_model.encode([query])[0]
+        chunk_embeddings = self.st_model.encode(self.chunks)
+        dense_scores = np.dot(chunk_embeddings, query_embedding)
+        dense_top_k = np.argsort(dense_scores)[-top_k:][::-1]
+
+        # Ajuste para uma interseção mais estrita
+        combined_indices = list(set(bm25_top_k) & set(dense_top_k))
+        combined_scores = [dense_scores[i]
+                           # Ajuste de limiar
+                           for i in combined_indices if dense_scores[i] > 0.5]
+
+        top_indices = sorted(range(len(combined_scores)),
+                             key=lambda i: combined_scores[i], reverse=True)[:top_k]
+        return [self.chunks[i] for i in top_indices], [combined_scores[i] for i in top_indices]
 
     def check_emotional_cues(self, query):
         positive_cues = ['happy', 'satisfied',
@@ -187,7 +217,8 @@ class EnhancedRAGBot:
         if not text1 or not text2:
             return 0.0
         try:
-            vectors = self.tfidf_vectorizer.fit_transform([text1, text2])  # Calcula a similaridade usando TF-IDF
+            vectors = self.tfidf_vectorizer.fit_transform(
+                [text1, text2])  # Calcula a similaridade usando TF-IDF
             return cosine_similarity(vectors[0], vectors[1])[0][0]
         except Exception as e:
             logging.error(f"Error in similarity calculation: {e}")
@@ -203,48 +234,45 @@ class EnhancedRAGBot:
 
         context_text = " ".join(context)
         similarity_score = self.calculate_similarity(response, context_text)
-        
+
         verified = similarity_score > 0.4
         confidence = similarity_score
-        
-        source_docs = [filename for filename, content in self.source_documents.items() 
+
+        source_docs = [filename for filename, content in self.source_documents.items()
                        if any(chunk in content for chunk in context)]
-        
+
         return verified, confidence, source_docs
 
     def handle_greeting(self, query):
         greetings = ['hi', 'hello', 'hey', 'ola', 'olá', 'greetings']
         if query.lower().strip() in greetings:
-            time_based_greeting = self.get_time_appropriate_greeting()
-            return f"{time_based_greeting}! I'm your AI-Skills Advisor. How can I assist you with your healthcare professional development today?"
+            return (
+                f"{self.get_time_appropriate_greeting()}! I'm your AI-Skills Advisor, "
+                f"here to support your professional development in healthcare. How can I assist you today?"
+            )
         return None
 
     def handle_identity_question(self, query):
-        identity_questions = ['who are you', 'what are you', 'tell me about yourself', 'what can you do']
+        identity_questions = ['who are you',
+                              'what are you', 'tell me about yourself']
         if any(question in query.lower() for question in identity_questions):
             return (
-                "I am the AI-Skills Advisor, a key component of the AI Clinical Advisory Crew. My role is to provide "
-                "continuous, data-driven support to healthcare professionals like yourself. Here's what I can do for you:\n\n"
-                "1. Analyze patient feedback and generate insights to improve care quality.\n"
-                "2. Identify opportunities to enhance workflows and processes in healthcare delivery.\n"
-                "3. Offer communication strategies to improve patient-provider interactions.\n"
-                "4. Provide psychological insights for better post-consultation patient care.\n"
-                "5. Deliver managerial overviews and summaries of patient feedback.\n"
-                "6. Offer personalized recommendations for professional development.\n"
-                "7. Provide instant, 24/7 access to AI-driven guidance and support.\n\n"
-                "My goal is to help you excel in your healthcare practice by leveraging AI-powered insights "
-                "and continuous learning. How can I assist you in improving your professional skills today?"
+                "I am the AI-Skills Advisor, dedicated to supporting healthcare professionals. "
+                "My role involves assisting with patient experience, health IT processes, clinical psychology, "
+                "communication, and management. How can I help enhance your healthcare practice today?"
             )
         return None
 
     def extract_patient_feedbacks(self, chunks: List[str]) -> List[Dict[str, str]]:
         feedbacks = []
         for chunk in chunks:
-            feedback_matches = re.finditer(r"Patient Feedback:(.*?)(?=Patient Feedback:|$)", chunk, re.DOTALL)
+            feedback_matches = re.finditer(
+                r"Patient Feedback:(.*?)(?=Patient Feedback:|$)", chunk, re.DOTALL)
             for match in feedback_matches:
                 feedback_text = match.group(1).strip()
-                date_match = re.search(r"Date of the Patient feedback: (\d{2}-\d{2}-\d{4})", feedback_text)
-                
+                date_match = re.search(
+                    r"Date of the Patient feedback: (\d{2}-\d{2}-\d{4})", feedback_text)
+
                 if feedback_text and date_match:
                     feedbacks.append({
                         "text": feedback_text,
@@ -256,14 +284,14 @@ class EnhancedRAGBot:
         # Extract date or specific keywords from the query
         date_match = re.search(r'\d{2}-\d{2}-\d{4}', query)
         keyword = re.search(r'\b(positive|negative|feedback)\b', query.lower())
-        
+
         feedback_chunks = []
         for chunk in self.chunks:
             if date_match and date_match.group(0) in chunk:
                 feedback_chunks.append(chunk)
             elif keyword and keyword.group(0) in chunk.lower():
                 feedback_chunks.append(chunk)
-        
+
         # Return formatted response
         if feedback_chunks:
             return "Here are the feedback entries based on your query:\n" + "\n".join(feedback_chunks)
@@ -276,53 +304,26 @@ class EnhancedRAGBot:
             return feedback_response
         return "I couldn't find any relevant patient feedback based on your query. Could you specify a date or type of feedback?"
 
-    def add_to_memory(self, query: str, response: str):
-        query_embedding = self.model.encode([query], convert_to_tensor=False)  # Get embedding for query
-        self.collection.add_documents(embeddings=query_embedding, metadatas={"query": query, "response": response})  # Store in ChromaDB
+    def add_to_memory(self, text: str, role: str):
+        self.conversation_memory.append({"text": text, "role": role})
+        if len(self.conversation_memory) > 10:  # Mantenha apenas as últimas 10 interações
+            self.conversation_memory.pop(0)
 
-    def retrieve_from_memory(self, query: str, k: int = 3) -> List[Tuple[str, str]]:
-        query_embedding = self.model.encode([query], convert_to_tensor=False)  # Get embedding for query
-        results = self.collection.query(query_embedding, k=k)  # Query ChromaDB
-        return [(doc['metadata']['query'], doc['metadata']['response']) for doc in results['documents']]  # Return past conversations
-
-    def calculate_bert_score(self, response: str, context: str) -> float:
-        P, R, F1 = score([response], [context], model_type='roberta-large')  # Calculate BERTScore
-        return F1.item()
-
-    def calibrate_response(self, response: str, context: str) -> str:
-        confidence = self.calculate_bert_score(response, context)  # Get confidence score
-        if confidence > 0.8:
-            return response
-        elif confidence > 0.6:
-            return f"According to my analysis, it is likely that {response}"
-        else:
-            return f"I'm not entirely certain, but it seems that {response}"
-
-    def generate_response(self, query: str) -> str:
-        relevant_docs = self.retrieve_and_rank(query)  # Retrieve and rank relevant documents
-        context = " ".join(relevant_docs)  # Combine context
-        input_text = f"Question: {query}\nContext: {context}\nAnswer:"
-        generated_text = self.generator_pipeline(input_text, max_length=200, num_return_sequences=1)  # Generate response
-        return generated_text[0]['generated_text']
+    def get_conversation_context(self) -> str:
+        return "\n".join([f"{item['role']}: {item['text']}" for item in self.conversation_memory])
 
     def call_llm(self, query: str, context_chunks: List[str], conversation_history: List[Dict[str, str]]) -> Tuple[str, bool, float, List[str]]:
-        # Check for greeting first
-        greeting_response = self.handle_greeting(query)
-        if greeting_response:
-            return greeting_response, True, 1.0, []
-
-        # Check for identity question
-        identity_response = self.handle_identity_question(query)
-        if identity_response:
-            return identity_response, True, 1.0, []
-
         system_prompt = (
             "You are the AI-Skills Advisor, an AI assistant focused on healthcare professional development. "
             "Your purpose is to provide accurate and tailored responses to improve the user's skills. "
             "Maintain this identity and provide responses without creating names or irrelevant details."
         )
-        
-        user_prompt = self.build_user_prompt(query, context_chunks)
+
+        conversation_context = self.get_conversation_context()
+
+        # Construa o prompt do usuário com base no tipo de consulta
+        user_prompt = self.build_user_prompt(
+            query, conversation_context, context_chunks)
 
         payload = {
             "model": "meta-llama-3.1-8b-instruct",
@@ -330,104 +331,97 @@ class EnhancedRAGBot:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            "temperature": 0.2,
-            "max_tokens": 500,
+            "temperature": 0.2,  # Restringe a criatividade
+            "max_tokens": 500,    # Limita o comprimento da resposta
             "stream": False
         }
 
         logging.debug(f"LLM Request Payload: {json.dumps(payload, indent=2)}")
 
         try:
-            response = requests.post(self.CHAT_API_URL, json=payload, timeout=30)
+            response = requests.post(
+                self.CHAT_API_URL, json=payload, timeout=30)
             response.raise_for_status()
-            response_content = response.json()['choices'][0]['message']['content']
+            response_content = response.json(
+            )['choices'][0]['message']['content']
             logging.debug(f"LLM Response: {response_content}")
 
+            # Calcular a confiança baseada na similaridade dos chunks
             chunk_embeddings = self.st_model.encode(context_chunks)
             query_embedding = self.st_model.encode([query])[0]
-            similarities = cosine_similarity([query_embedding], chunk_embeddings)[0]
-            
+            similarities = cosine_similarity(
+                [query_embedding], chunk_embeddings)[0]
+
+            # Return similarities instead of confidence
             return response_content, True, similarities, []
         except Exception as e:
             logging.error(f"Error calling LLM: {e}")
             return self.fallback_response(query, context_chunks)
 
-    def build_user_prompt(self, query: str, context_chunks: List[str]) -> str:
+    def build_user_prompt(self, query: str, conversation_context: str, context_chunks: List[str]) -> str:
         if self.is_greeting(query):
             return (
-                f"The user has greeted you with '{query}'. Respond with a warm, professional greeting "
-                f"and briefly introduce yourself as the AI-Skills Advisor, part of the AI Clinical Advisory Crew. "
-                f"Ask how you can assist them with their professional development in healthcare today."
+                f"Conversation history:\n{conversation_context}\n\n"
+                f"The user has greeted you with '{
+                    query}'. Respond with a warm, professional greeting "
+                f"and briefly introduce yourself as the AI-Skills Advisor. Ask how you can assist them "
+                f"with their professional development in healthcare today."
             )
         elif self.is_identity_question(query):
             return (
-                f"The user has asked '{query}'. Provide a comprehensive explanation of your role as the AI-Skills Advisor, "
-                f"part of the AI Clinical Advisory Crew. Emphasize your capabilities in analyzing patient feedback, "
-                f"improving healthcare processes, enhancing communication, providing psychological insights, "
-                f"and offering continuous professional development support. Offer to assist with any specific areas "
-                f"they'd like to focus on."
+                f"Conversation history:\n{conversation_context}\n\n"
+                f"The user has asked '{
+                    query}'. Provide a concise explanation of your role as the AI-Skills Advisor. "
+                f"Emphasize your ability to support healthcare professionals in their development and "
+                f"offer to assist with any specific areas they'd like to focus on."
             )
-        elif "feedback" in query.lower():
+        elif "patient feedback" in query.lower():
             feedbacks = self.extract_patient_feedbacks(self.chunks)
             feedback_summary = json.dumps(feedbacks, indent=2)
             return (
-                f"The user has requested patient feedback. Here are all the patient feedbacks extracted from the database:\n{feedback_summary}\n\n"
+                f"Conversation history:\n{conversation_context}\n\n"
+                f"The user has requested patient feedback. Here are all the patient feedbacks extracted from the database:\n{
+                    feedback_summary}\n\n"
                 f"Provide a concise summary of the feedback, including the number of feedbacks, dates, and key points. "
-                f"Offer insights on how this feedback can be used for professional development."
+                f"Do not include any additional analysis or comments."
             )
         else:
             return (
-                f"The user has asked: '{query}'. Provide a response that focuses on their professional growth "
+                f"Conversation history:\n{conversation_context}\n\n"
+                f"The user has asked: '{
+                    query}'. Provide a response that focuses on their professional growth "
                 f"and addresses their specific query. If relevant, incorporate insights from the following context: "
                 f"{' '.join(context_chunks)}\n\n"
-                f"Maintain a supportive and professional tone, offering guidance and resources tailored to healthcare professionals. "
-                f"Remember to emphasize your role as part of the AI Clinical Advisory Crew, providing continuous, data-driven support."
+                f"Maintain a supportive and professional tone, offering guidance and resources tailored to healthcare professionals."
             )
 
     def is_greeting(self, query: str) -> bool:
-        greetings = ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening']
+        greetings = ['hi', 'hello', 'hey', 'good morning',
+                     'good afternoon', 'good evening']
         return query.lower().strip() in greetings
 
     def is_identity_question(self, query: str) -> bool:
-        identity_questions = ['who are you', 'what are you', 'tell me about yourself']
+        identity_questions = ['who are you',
+                              'what are you', 'tell me about yourself']
         return any(question in query.lower() for question in identity_questions)
 
     def fallback_response(self, query: str, context_chunks: List[str]) -> Tuple[str, bool, float, List[str]]:
         logging.info("Using fallback response mechanism")
-        
         if self.is_greeting(query):
-            time_based_greeting = self.get_time_appropriate_greeting()
-            response = f"{time_based_greeting}! I'm your AI-Skills Advisor, part of the AI Clinical Advisory Crew. How can I assist you with your healthcare professional development today?"
-        elif self.is_identity_question(query):
-            response = (
-                "I am the AI-Skills Advisor, a key component of the AI Clinical Advisory Crew. My role is to provide "
-                "continuous, data-driven support to healthcare professionals like yourself. Here's what I can do for you:\n\n"
-                "1. Analyze patient feedback and generate insights to improve care quality.\n"
-                "2. Identify opportunities to enhance workflows and processes in healthcare delivery.\n"
-                "3. Offer communication strategies to improve patient-provider interactions.\n"
-                "4. Provide psychological insights for better post-consultation patient care.\n"
-                "5. Deliver managerial overviews and summaries of patient feedback.\n"
-                "6. Offer personalized recommendations for professional development.\n"
-                "7. Provide instant, 24/7 access to AI-driven guidance and support.\n\n"
-                "My goal is to help you excel in your healthcare practice by leveraging AI-powered insights "
-                "and continuous learning. How can I assist you in improving your professional skills today?"
-            )
+            response = "Hello! I'm your AI-Skills Advisor. How can I assist you today with your healthcare development?"
         else:
             response = (
-                "I apologize, but I'm currently experiencing some technical difficulties. As your AI-Skills Advisor, "
-                "I'm here to help with your professional growth in healthcare. While I work on resolving this issue, "
-                "could you please rephrase your query? I'm particularly equipped to assist with analyzing patient feedback, "
-                "improving healthcare processes, enhancing communication strategies, and offering personalized professional "
-                "development recommendations. What specific area of your healthcare practice would you like to focus on today?"
+                "I'm here to help with your professional growth. Could you refine your query? "
+                "For example, you can ask about specific feedback by mentioning a date or a type, like 'positive feedback'."
             )
-        
         return response, True, 1.0, []
 
     def regenerate_response(self, query: str, context_chunks: List[str], conversation_history: List[Dict[str, str]]) -> str:
         try:
             relevant_context = self.get_relevant_context(query, context_chunks)
-            conversation_context = self.format_conversation_history(conversation_history)
-            
+            conversation_context = self.format_conversation_history(
+                conversation_history)
+
             stricter_prompt = (
                 f"Based on the following context and conversation history, provide a concise and relevant answer to the user's query. "
                 f"Context: {relevant_context}\n"
@@ -436,7 +430,7 @@ class EnhancedRAGBot:
                 "Respond as an AI Healthcare Professional Coach, focusing on healthcare professional development. "
                 "If the query is off-topic, politely guide the conversation back to relevant topics."
             )
-            
+
             payload = {
                 "model": "meta-llama-3.1-8b-instruct",
                 "messages": [
@@ -461,14 +455,16 @@ class EnhancedRAGBot:
         # Use TF-IDF para encontrar os chunks mais relevantes
         tfidf = TfidfVectorizer().fit_transform([query] + context_chunks)
         similarities = cosine_similarity(tfidf[0:1], tfidf[1:]).flatten()
-        top_indices = similarities.argsort()[-3:][::-1]  # Pegar os 3 chunks mais relevantes
-        
+        # Pegar os 3 chunks mais relevantes
+        top_indices = similarities.argsort()[-3:][::-1]
+
         relevant_context = "\n".join([context_chunks[i] for i in top_indices])
         return relevant_context
 
     def format_conversation_history(self, conversation_history: List[Dict[str, str]]) -> str:
         formatted_history = ""
-        for message in conversation_history[-5:]:  # Limitar a 5 mensagens mais recentes
+        # Limitar a 5 mensagens mais recentes
+        for message in conversation_history[-5:]:
             role = "User" if message["role"] == "user" else "Assistant"
             formatted_history += f"{role}: {message['content']}\n"
         return formatted_history
@@ -476,30 +472,43 @@ class EnhancedRAGBot:
     def initialize(self):
         text = self.load_data()
         if not hasattr(self, 'initialization_done'):
-            st.success(f"Successfully loaded data from {self.consolidated_path}")
+            st.success(f"Successfully loaded data from {
+                       self.consolidated_path}")
             self.initialization_done = True
         self.chunks = self.split_text_into_chunks(text)
         embeddings = self.generate_embeddings(self.chunks)
         self.index = self.build_faiss_index(embeddings)
         self.bm25 = BM25Okapi(self.chunks)  # Inicializa BM25
-        self.st_model = SentenceTransformer('all-MiniLM-L6-v2')  # Inicializa modelo de SentenceTransformer
+        # Inicializa modelo de SentenceTransformer
+        self.st_model = SentenceTransformer('all-MiniLM-L6-v2')
 
     def process_query(self, query: str) -> Tuple[str, List[str]]:
         """Process the user's query to find relevant chunks and generate a response."""
-        # Check if the query is in the cache
-        cached_response = self.retrieve_from_memory(query)
-        if cached_response:
-            st.session_state.cache_hits += 1
-            return cached_response[0][1], []  # Return the cached response
+        # Generate embeddings for the query
+        query_embedding = self.generate_embeddings([query])
+        if not query_embedding:
+            return "Error generating embeddings for the query.", []
 
-        # If not in cache, generate a new response
-        relevant_chunks, _ = self.retrieve_similar_chunks(query)
-        response, _, _, _ = self.call_llm(query, relevant_chunks, [])
-        
-        # Store the new response in memory
-        self.add_to_memory(query, response)
-        
-        return response, []
+        # Retrieve similar chunks using the FAISS index
+        if self.index is None:
+            return "Index not initialized.", []
+
+        distances, indices = self.index.search(
+            np.array(query_embedding), 5)  # Retrieve top 5 similar chunks
+        relevant_chunks = [self.chunks[i] for i in indices[0]]
+
+        # Here you can implement logic to generate a response based on the relevant chunks
+        response = self.generate_response(relevant_chunks)
+
+        return response, relevant_chunks
+
+    def generate_response(self, relevant_chunks: List[str]) -> str:
+        """Generate a response based on the relevant chunks."""
+        # Combine relevant chunks into a single response
+        response = "Here are the relevant pieces of information:\n"
+        for chunk in relevant_chunks:
+            response += f"- {chunk}\n"
+        return response
 
     def calibrate_confidence(self, response: str, confidence: float) -> str:
         if confidence > 0.8:
@@ -570,8 +579,9 @@ def plot_confidence_gauge(confidence: float):
         plot_bgcolor="rgba(0,0,0,0)",
         font={'color': "white", 'size': 14}
     )
-    
+
     return fig
+
 
 def get_confidence_legend(confidence: float) -> str:
     if confidence >= 0.8:
@@ -592,7 +602,8 @@ def get_ragbot():
 
 
 def main():
-    st.set_page_config(page_title="Enhanced RAGBot Healthcare Coach", layout="wide", initial_sidebar_state="expanded")
+    st.set_page_config(page_title="Enhanced RAGBot Healthcare Coach",
+                       layout="wide", initial_sidebar_state="expanded")
     st.title("AI Skills Advisor with Enhanced Verification")
 
     st.markdown(
@@ -652,23 +663,28 @@ def main():
             with st.spinner("Processing your query..."):
                 try:
                     st.session_state.total_queries += 1
-                    relevant_chunks, distances = ragbot.retrieve_similar_chunks(prompt)
-                    response, verified, similarities, source_docs = ragbot.call_llm(prompt, relevant_chunks, st.session_state.messages)
-                    
+                    relevant_chunks, distances = ragbot.retrieve_similar_chunks(
+                        prompt)
+                    response, verified, similarities, source_docs = ragbot.call_llm(
+                        prompt, relevant_chunks, st.session_state.messages)
+
                     # Log de debug para visualizar chunks relevantes e distâncias
                     logging.debug(f"Relevant chunks: {relevant_chunks}")
                     logging.debug(f"Distances: {distances}")
-                    
+
                 except Exception as e:
                     logging.error(f"Error processing query: {e}")
-                    response, verified, similarities, source_docs = ragbot.fallback_response(prompt, [])
+                    response, verified, similarities, source_docs = ragbot.fallback_response(
+                        prompt, [])
                     distances = []
 
-            confidence = 1 / (1 + np.mean(similarities))  # Calculate confidence using distances
-            st.markdown(f"✅ Verified Response (Confidence: {confidence * 100:.2f}%)")
-            
+            # Calculate confidence using distances
+            confidence = 1 / (1 + np.mean(similarities))
+            st.markdown(f"✅ Verified Response (Confidence: {
+                        confidence * 100:.2f}%)")
+
             st.markdown(response)
-            
+
             if source_docs:
                 st.markdown("**Sources:**")
                 for doc in source_docs:
@@ -689,18 +705,21 @@ def main():
             # Adicione o novo gráfico de confiança
             if 'distances' in locals() and distances:
                 fig_confidence = plot_confidence_gauge(confidence)
-                st.plotly_chart(fig_confidence, use_container_width=True, config={'displayModeBar': False})
-                
+                st.plotly_chart(fig_confidence, use_container_width=True, config={
+                                'displayModeBar': False})
+
                 # Add the legend as a separate Streamlit element
                 legend_text = get_confidence_legend(confidence)
-                st.markdown(f"<span style='color: #35855d; font-size: 14px;'>{legend_text}</span>", unsafe_allow_html=True)
-                
-                #st.markdown(f"<span style='color: #35855d; font-size: 10px;'>Confidence: {confidence:.2f}</span>", unsafe_allow_html=True)
+                st.markdown(f"<span style='color: #35855d; font-size: 14px;'>{
+                            legend_text}</span>", unsafe_allow_html=True)
+
+                # st.markdown(f"<span style='color: #35855d; font-size: 10px;'>Confidence: {confidence:.2f}</span>", unsafe_allow_html=True)
 
             # Mantenha o gráfico de similaridade existente
             with st.container():
                 if 'distances' in locals() and distances:
-                    fig_similarity = plot_similarity_scores(relevant_chunks, distances)
+                    fig_similarity = plot_similarity_scores(
+                        relevant_chunks, distances)
                     st.plotly_chart(fig_similarity, use_container_width=True)
                     st.markdown(
                         "<span style='color: #35855d; font-size: 14px;'>This chart shows how similar each retrieved chunk is to your query. "
@@ -708,11 +727,13 @@ def main():
                         unsafe_allow_html=True
                     )
                 else:
-                    st.warning("No similarity scores available for this query.")
+                    st.warning(
+                        "No similarity scores available for this query.")
 
             # Mantenha as estatísticas de cache existentes
             with st.expander("Cache Statistics", expanded=True):
-                cache_hit_rate = (st.session_state.cache_hits / st.session_state.total_queries) * 100 if st.session_state.total_queries > 0 else 0
+                cache_hit_rate = (st.session_state.cache_hits / st.session_state.total_queries) * \
+                    100 if st.session_state.total_queries > 0 else 0
                 st.write(f"Cache Hit Rate: {cache_hit_rate:.2f}%")
                 st.markdown(
                     "<small>Percentage of queries answered using cached results. "
@@ -753,21 +774,8 @@ def main():
                     st.warning("No relevant context available for this query.")
 
 
-def update_cache_statistics():
-    if "cache_hits" not in st.session_state:
-        st.session_state.cache_hits = 0
-    if "total_queries" not in st.session_state:
-        st.session_state.total_queries = 0
-    
-    st.session_state.total_queries += 1
-    
-    cache_hit_rate = (st.session_state.cache_hits / st.session_state.total_queries) * 100 if st.session_state.total_queries > 0 else 0
-    
-    return cache_hit_rate
-
-
 if __name__ == "__main__":
     main()
 
 # to run the app, type in the terminal:
-# streamlit run LmStudio/Rag_bot/ragbot_streamlit_1.1.py
+# streamlit run LmStudio/Rag_bot/ragbot_streamlit.py

@@ -1,3 +1,6 @@
+# ----------------------------------------------
+# Code to run the RAG bot solo
+# ----------------------------------------------
 import os
 import requests
 import numpy as np

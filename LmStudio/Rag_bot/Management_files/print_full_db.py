@@ -1,3 +1,6 @@
+# ----------------------------------------------
+# Code to print the full database tables and columns names
+# ----------------------------------------------
 import sqlite3
 
 # Caminho para o banco de dados
