@@ -154,4 +154,4 @@ if __name__ == "__main__":
 
 
 # to run the app, type in the terminal:
-# streamlit run LmStudio/Rag_bot/app.py 
+# streamlit run LmStudio/Rag_bot/app.py
